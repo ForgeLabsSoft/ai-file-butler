@@ -1,0 +1,196 @@
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace AIFileButler;
+
+public readonly record struct Suggestion(
+    string Category, string Filename, double Confidence, string Reason, string Backend)
+{
+    // Optional metadata used to build sub-folders (year/genre/artist/actor, and
+    // for invoices whether the other party is a "client" or a "distributor").
+    public string? Year { get; init; }
+    public string? Genre { get; init; }
+    public string? Person { get; init; }
+    public string? Party { get; init; }
+}
+
+public interface IClassifier
+{
+    string Backend { get; }
+    Suggestion Classify(FileInfo file, string snippet);
+}
+
+public static class Slug
+{
+    public static string Make(string name, string ext)
+    {
+        name = Regex.Replace(name, @"[^\w\-. ]", "").Trim().Replace(' ', '_');
+        name = Regex.Replace(name, "_+", "_").Trim('_', '.');
+        if (string.IsNullOrEmpty(name)) name = "file";
+        if (!string.IsNullOrEmpty(ext) && !name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            name += ext;
+        return name.Length > 120 ? name[..120] : name;
+    }
+}
+
+/// <summary>Talks to a local Ollama model. Private + content-aware.</summary>
+public sealed class OllamaClassifier : IClassifier
+{
+    public string Backend => "ollama";
+
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(120) };
+    private readonly string _url;
+    private readonly string _model;
+
+    public OllamaClassifier(string url, string model)
+    {
+        _url = url.TrimEnd('/');
+        _model = model;
+    }
+
+    public static bool IsAvailable(string url)
+    {
+        try
+        {
+            // /api/tags can be slow (~2s) on a cold server; give it room so we
+            // don't wrongly fall back to rules mode when Ollama is actually up.
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var resp = Http.GetAsync($"{url.TrimEnd('/')}/api/tags", cts.Token).GetAwaiter().GetResult();
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    private const string PromptTemplate =
+        "You are a file-organizing assistant. Given a file's name and a snippet of its " +
+        "content, choose the single best category and propose a clean, descriptive filename.\n\n" +
+        "Allowed categories (use the key exactly): {0}\n\n" +
+        "Filename rules: keep the original extension; concise, underscores, no spaces; " +
+        "include vendor/subject and date if detectable, e.g. Invoice_BMW_2026-06.pdf. " +
+        "For the FILENAME, don't invent a vendor/date that isn't in the name or content.\n\n" +
+        "Also fill these metadata fields, else use \"\":\n" +
+        "- year: 4-digit release/issue year if known.\n" +
+        "- genre: for a movie or song you RECOGNIZE from the title, its main genre " +
+        "(e.g. Action, Sci-Fi, Comedy, Rock, Pop). Fill this from your OWN knowledge of the title — " +
+        "this is expected and is NOT inventing. E.g. Inception → Sci-Fi, The Matrix → Sci-Fi.\n" +
+        "- person: for a recognized movie, the lead actor; for a song, the artist — from your own knowledge. " +
+        "E.g. Inception → Leonardo DiCaprio.\n" +
+        "- party: for an invoice/receipt, \"distributor\" if it is FROM a supplier/vendor/store, " +
+        "\"client\" if it is a document issued TO a customer/client; otherwise \"\".\n\n" +
+        "Respond with ONLY a JSON object: " +
+        "{{\"category\":\"<key>\",\"filename\":\"<name.ext>\",\"confidence\":<0..1>,\"reason\":\"<short>\"," +
+        "\"year\":\"\",\"genre\":\"\",\"person\":\"\",\"party\":\"\"}}\n\n" +
+        "FILE NAME: {1}\nCONTENT SNIPPET:\n{2}\n";
+
+    public Suggestion Classify(FileInfo file, string snippet)
+    {
+        var cats = string.Join(", ", Config.Categories.Select(c => c.Key));
+        var prompt = string.Format(PromptTemplate, cats, file.Name,
+            string.IsNullOrEmpty(snippet) ? "(no readable text; use the filename)" : snippet);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            model = _model,
+            prompt,
+            stream = false,
+            format = "json",
+            options = new { temperature = 0.1 },
+        });
+
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        var resp = Http.PostAsync($"{_url}/api/generate", content).GetAwaiter().GetResult();
+        resp.EnsureSuccessStatusCode();
+        var raw = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+        using var outer = JsonDocument.Parse(raw);
+        var inner = outer.RootElement.GetProperty("response").GetString() ?? "{}";
+        using var doc = JsonDocument.Parse(inner);
+        var root = doc.RootElement;
+
+        var cat = GetStr(root, "category", "misc");
+        if (!Config.Categories.Any(c => c.Key == cat)) cat = "misc";
+
+        var rawName = GetStr(root, "filename", Path.GetFileNameWithoutExtension(file.Name));
+        var fname = Slug.Make(Path.GetFileNameWithoutExtension(rawName), file.Extension);
+
+        double conf = root.TryGetProperty("confidence", out var cEl)
+                      && cEl.ValueKind is JsonValueKind.Number ? cEl.GetDouble() : 0.5;
+        conf = Math.Clamp(conf, 0, 1);
+
+        var reason = GetStr(root, "reason", "");
+        if (reason.Length > 200) reason = reason[..200];
+
+        return new Suggestion(cat, fname, conf, reason, Backend)
+        {
+            Year = Clean(GetStr(root, "year", "")),
+            Genre = Clean(GetStr(root, "genre", "")),
+            Person = Clean(GetStr(root, "person", "")),
+            Party = GetStr(root, "party", "").Trim().ToLowerInvariant(),
+        };
+    }
+
+    // Folder-safe, Title Case, capped — for genre/artist/actor sub-folders.
+    private static string Clean(string s)
+    {
+        s = Regex.Replace(s ?? "", @"[^\w\- ]", "").Trim();
+        return s.Length > 40 ? s[..40] : s;
+    }
+
+    private static string GetStr(JsonElement e, string prop, string fallback) =>
+        e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString() ?? fallback : fallback;
+}
+
+/// <summary>Heuristics on extension + filename. Always available, zero deps.</summary>
+public sealed class RuleClassifier : IClassifier
+{
+    public string Backend => "rules";
+
+    private static readonly Dictionary<string, string> ExtCategory = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".jpg"] = "image", [".jpeg"] = "image", [".png"] = "image", [".gif"] = "image",
+        [".webp"] = "image", [".bmp"] = "image", [".heic"] = "image", [".svg"] = "image",
+        [".exe"] = "installer", [".msi"] = "installer", [".msix"] = "installer", [".appx"] = "installer",
+        [".zip"] = "archive", [".rar"] = "archive", [".7z"] = "archive", [".tar"] = "archive",
+        [".gz"] = "archive", [".iso"] = "archive",
+        [".mp4"] = "movie", [".mkv"] = "movie", [".mov"] = "movie", [".avi"] = "movie", [".wmv"] = "movie", [".webm"] = "movie",
+        [".mp3"] = "music", [".wav"] = "music", [".flac"] = "music", [".m4a"] = "music", [".aac"] = "music", [".ogg"] = "music",
+        [".py"] = "code", [".js"] = "code", [".ts"] = "code", [".cs"] = "code", [".java"] = "code",
+        [".c"] = "code", [".cpp"] = "code", [".go"] = "code", [".rs"] = "code", [".sql"] = "code",
+        [".sh"] = "code", [".ps1"] = "code",
+        [".doc"] = "document", [".docx"] = "document", [".txt"] = "document", [".md"] = "document",
+        [".rtf"] = "document", [".odt"] = "document", [".pptx"] = "document", [".xlsx"] = "document",
+        [".csv"] = "document", [".pdf"] = "document",
+    };
+
+    private static readonly Dictionary<string, string[]> Keywords = new()
+    {
+        ["invoice"] = new[] { "invoice", "factura", "rechnung", "facture" },
+        ["receipt"] = new[] { "receipt", "chitanta", "bon", "checklist" },
+    };
+
+    public Suggestion Classify(FileInfo file, string snippet)
+    {
+        var hay = (file.Name + "\n" + snippet).ToLowerInvariant();
+        string? cat = null;
+        bool byKeyword = false;
+        foreach (var (key, words) in Keywords)
+            if (words.Any(w => hay.Contains(w))) { cat = key; byKeyword = true; break; }
+
+        cat ??= ExtCategory.GetValueOrDefault(file.Extension, "misc");
+
+        var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
+        double conf = cat != "misc" ? 0.8 : 0.3;
+        return new Suggestion(cat, fname, conf, byKeyword ? "matched by keyword" : "matched by extension", Backend);
+    }
+}
+
+public static class ClassifierFactory
+{
+    public static IClassifier Get(Config cfg) =>
+        OllamaClassifier.IsAvailable(cfg.OllamaUrl)
+            ? new OllamaClassifier(cfg.OllamaUrl, cfg.OllamaModel)
+            : new RuleClassifier();
+}

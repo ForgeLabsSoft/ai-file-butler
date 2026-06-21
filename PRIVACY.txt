@@ -1,0 +1,37 @@
+AI File Butler — Privacy Statement
+Last updated: 2026
+
+Short version: everything happens on your computer. AI File Butler does not
+collect, send, or upload anything. There are no accounts, no servers, no
+telemetry, and no tracking.
+
+WHAT THE APP DOES WITH YOUR DATA
+- It reads the files in the folders you choose to watch, in order to sort and
+  rename them. This reading happens entirely on your device.
+- For PDFs it extracts text locally; for photos it reads EXIF data (date, GPS)
+  and can run face DETECTION locally (it does not identify who anyone is); for
+  music it reads the embedded tags.
+- When the optional AI mode is enabled, the file's name and a short text snippet
+  are sent to a local AI model running on your own machine via Ollama
+  (http://localhost). This never leaves your computer and requires no internet.
+
+WHAT IS STORED ON YOUR DEVICE (and nowhere else)
+- butler_config.json   — your settings (watched folders, language, options).
+- learned_rules.json   — patterns learned from your corrections.
+- placements.json      — a record of where files were moved (to detect your
+                         corrections).
+- undo_log.jsonl       — so moves can be undone.
+These are plain files next to the app. Delete them any time to reset the app.
+
+WHAT IS NEVER DONE
+- No file contents, file names, or metadata are uploaded anywhere.
+- No analytics, crash reporting, advertising, or profiling.
+- No internet connection is required for the app to work.
+
+THIRD PARTIES
+- Ollama and the AI models run locally on your device; the app does not send your
+  data to Ollama's or anyone else's servers.
+- If YOU choose to download the app or a model, those downloads go directly to
+  the respective project's site (e.g. ollama.com) under their own terms.
+
+Questions: https://github.com/ForgeLabsSoft/driveforge

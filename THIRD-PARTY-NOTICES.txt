@@ -1,0 +1,39 @@
+AI File Butler — Third-Party Notices
+====================================
+
+AI File Butler includes or builds upon the following third-party components.
+Each remains licensed under its own terms, reproduced/linked below.
+
+-------------------------------------------------------------------------------
+.NET Runtime & Windows Forms — Microsoft
+License: MIT License
+https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
+The .NET runtime is bundled into the single-file executable (self-contained).
+
+-------------------------------------------------------------------------------
+PdfPig — UglyToad
+License: Apache License 2.0
+https://github.com/UglyToad/PdfPig/blob/master/LICENSE
+Used to extract text from PDF files locally.
+
+-------------------------------------------------------------------------------
+TagLib# (TagLibSharp) — TagLib# contributors
+License: GNU Lesser General Public License v2.1 (LGPL-2.1)
+https://github.com/mono/taglib-sharp/blob/main/COPYING
+Used to read embedded media tags (music artist/genre/year, photo EXIF).
+The corresponding source for this library is available at the URL above. In
+accordance with the LGPL, you may replace this component with a compatible
+version.
+
+-------------------------------------------------------------------------------
+Windows runtime APIs — Microsoft Windows
+Windows.Media.Ocr (OCR), Windows.Data.Pdf (PDF rendering), and
+Windows.Media.FaceAnalysis (face detection) are part of the Windows operating
+system and are used under your Windows license. They are not redistributed with
+this app.
+
+-------------------------------------------------------------------------------
+Optional, NOT bundled (installed separately by the user):
+- Ollama (https://ollama.com) and the AI models you choose (e.g. Llama by Meta,
+  subject to the Llama Community License). These run locally on your device and
+  are governed by their own licenses.

@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+
+# Installer build output (binaries are published via GitHub Releases, not git)
+installer/Output/
+
+# Runtime state generated next to the exe
+butler_config.json
+learned_rules.json
+placements.json
+undo_log.jsonl
+
+# IDE / OS
+.vs/
+*.user
+Thumbs.db
+desktop.ini

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe = no console window; it's a tray app. -->
+    <OutputType>WinExe</OutputType>
+    <!-- windows10.0.x TFM unlocks the built-in Windows.Media.Ocr engine (WinRT),
+         so OCR needs no external binary like Tesseract. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AIFileButler</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+
+    <!-- Proper version/company metadata: looks legitimate and reduces the
+         chance an unsigned exe trips antivirus heuristics. -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>ForgeLabsSoft</Company>
+    <Authors>ForgeLabsSoft</Authors>
+    <Product>AI File Butler</Product>
+    <AssemblyTitle>AI File Butler</AssemblyTitle>
+    <Description>Local, private AI file organizer for Windows — sorts and renames files with on-device AI.</Description>
+    <Copyright>Copyright © 2026 ForgeLabsSoft</Copyright>
+
+    <!-- Single-file/self-contained options are passed on the publish command
+         line (see README), so plain dotnet build/run stays fast and offline. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pure-managed PDF text extraction (one-time NuGet restore needed). -->
+    <PackageReference Include="PdfPig" Version="0.1.9" />
+    <!-- Reads music tags (artist/genre/year) for media sub-sorting. -->
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
+  </ItemGroup>
+
+</Project>
