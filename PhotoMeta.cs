@@ -27,8 +27,11 @@ public static class PhotoMeta
     /// person, "People/Unknown" for an unrecognized face, or "" if no face.</summary>
     public static string PeopleFolder(FileInfo file)
     {
+        // Without the (optional, downloaded) model, fall back to detect-only grouping.
+        if (!FaceRecognizer.ModelReady)
+            return HasPeople(file) ? "People" : "No People";
         var emb = FaceRecognizer.EmbedDominantFace(file.FullName);
-        if (emb is null) return HasPeople(file) ? "People/Unknown" : "";
+        if (emb is null) return "";
         var name = People.Identify(emb);
         return name is null ? "People/Unknown" : "People/" + name;
     }

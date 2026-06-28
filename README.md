@@ -32,7 +32,8 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 | 📄 **Text · PDF · photos** | Extracts PDF text and OCRs photos/scans (built-in Windows OCR) |
 | ✍️ **Smart renaming** | `scan_4471.pdf` → `Invoice_Glovo_88231.pdf` — vendor, subject, date |
 | 🎬 **Rich media sorting** | Movies by **genre/lead actor/year**, music by **artist/genre/year** (ID3 tags), invoices split into **Clients / Distributors** |
-| 📸 **Photo sorting** | Photos by **date taken**, **GPS location** (offline nearest-city), or **people** (built-in face detection) — all from EXIF, no cloud |
+| 📸 **Photo sorting** | Photos by **date taken**, **GPS location** (offline nearest-city), or **people** — all on-device, no cloud |
+| 🧑 **Face recognition** | Enroll people by example (tray → People) and photos sort into `People/<Name>`. Uses a small on-device model, downloaded once on demand (~13 MB) |
 | 🎓 **Learns from you** | Move a file once; similar files follow next time |
 | 🔒 **100% offline** | No cloud, no account, no telemetry |
 | 🛡️ **Safe by default** | First run starts in **manual mode** — nothing moves until you opt in |

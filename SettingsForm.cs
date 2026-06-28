@@ -504,6 +504,37 @@ public sealed class PeopleForm : Form
         Controls.Add(_list);
         Controls.Add(bottom);
         Controls.Add(hint);
+
+        // one-time model download banner (face model is not bundled)
+        var dlBtn = new Button
+        {
+            Text = L.S("ppl_download"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Tag = "primary", Padding = new Padding(10, 4, 10, 4), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
+        };
+        dlBtn.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        var dlLbl = new Label { Text = L.S("ppl_dl_hint"), Dock = DockStyle.Top, Height = 22, AutoSize = false };
+        var dlFlow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
+        dlFlow.Controls.Add(dlBtn);
+        var dlBanner = new Panel { Dock = DockStyle.Top, Height = 68, BackColor = Color.FromArgb(255, 248, 225), Padding = new Padding(12, 8, 12, 8), Visible = !FaceRecognizer.ModelReady };
+        dlBanner.Controls.Add(dlFlow);
+        dlBanner.Controls.Add(dlLbl);
+        dlBtn.Click += (_, _) =>
+        {
+            dlBtn.Enabled = false; dlBtn.Text = "…";
+            Task.Run(FaceRecognizer.DownloadModel).ContinueWith(t =>
+            {
+                if (IsDisposed) return;
+                BeginInvoke(() =>
+                {
+                    dlBtn.Enabled = true; dlBtn.Text = L.S("ppl_download");
+                    if (t.Result) dlBanner.Visible = false;
+                    else MessageBox.Show(this, L.S("ppl_dl_fail"), Text);
+                });
+            });
+        };
+        Controls.Add(dlBanner);
+
         Load += (_, _) => Refresh3();
         Theme.Apply(this);
     }
@@ -518,6 +549,7 @@ public sealed class PeopleForm : Form
 
     private void AddPhoto()
     {
+        if (!FaceRecognizer.ModelReady) { MessageBox.Show(this, L.S("ppl_dl_hint"), Text); return; }
         var nm = _name.Text.Trim();
         if (nm.Length == 0) { _name.Focus(); return; }
         using var dlg = new OpenFileDialog

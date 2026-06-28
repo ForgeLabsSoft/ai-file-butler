@@ -1,34 +1,67 @@
 using System.Drawing;
-using FaceONNX;
+using System.Drawing.Drawing2D;
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
+using Windows.Graphics.Imaging;
+using Windows.Media.FaceAnalysis;
+using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace AIFileButler;
 
-/// <summary>Computes a numeric "fingerprint" (embedding) for the dominant face in
-/// a photo, using the local FaceONNX models. Two photos of the same person yield
-/// close vectors (high cosine similarity). All on-device, no cloud.</summary>
+/// <summary>On-device face recognition with a small (~13 MB) MobileFaceNet model
+/// (ArcFace, WebFace600K) via ONNX Runtime, plus the built-in Windows face
+/// detector. Two photos of the same person give vectors with high cosine
+/// similarity. Nothing leaves the device.</summary>
 public static class FaceRecognizer
 {
     private static readonly object _lock = new();
-    private static FaceDetector? _detector;
-    private static Face68LandmarksExtractor? _landmarks;
-    private static FaceEmbedder? _embedder;
-    private static bool _failed;
+    private static InferenceSession? _session;
+    private static string _input = "input.1";
+
+    // The model is NOT bundled (its license is non-commercial-research-only, so we
+    // can't redistribute it). It's downloaded once, on demand, to a local cache.
+    private const string ModelUrl =
+        "https://huggingface.co/immich-app/buffalo_s/resolve/main/recognition/model.onnx";
+
+    public static string ModelPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AI File Butler", "models", "w600k_mbf.onnx");
+
+    /// <summary>True once the face-recognition model has been downloaded.</summary>
+    public static bool ModelReady => File.Exists(ModelPath);
+
+    /// <summary>Download the ~13 MB model to the local cache. Returns success.</summary>
+    public static bool DownloadModel()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ModelPath)!);
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            var bytes = http.GetByteArrayAsync(ModelUrl).GetAwaiter().GetResult();
+            if (bytes.Length < 1_000_000) return false; // sanity: real model is ~13 MB
+            File.WriteAllText(ModelPath + ".tmp", ""); // ensure dir writable
+            File.WriteAllBytes(ModelPath, bytes);
+            File.Delete(ModelPath + ".tmp");
+            return true;
+        }
+        catch { return false; }
+    }
 
     private static bool Ensure()
     {
-        if (_failed) return false;
-        if (_embedder is not null) return true;
+        if (_session is not null) return true;
+        if (!ModelReady) return false; // not downloaded yet
         lock (_lock)
         {
-            if (_embedder is not null) return true;
+            if (_session is not null) return true;
             try
             {
-                _detector = new FaceDetector();
-                _landmarks = new Face68LandmarksExtractor();
-                _embedder = new FaceEmbedder();
+                _session = new InferenceSession(ModelPath);
+                _input = _session.InputMetadata.Keys.First();
                 return true;
             }
-            catch { _failed = true; return false; }
+            catch { return false; }
         }
     }
 
@@ -38,15 +71,63 @@ public static class FaceRecognizer
         if (!Ensure()) return null;
         try
         {
+            path = Path.GetFullPath(path); // WinRT StorageFile needs an absolute path
+            var box = DetectLargestFace(path);
+            if (box is null) return null;
             using var bmp = new Bitmap(path);
-            var faces = _detector!.Forward(bmp);
-            if (faces is null || faces.Length == 0) return null;
+            var r = Expand(box.Value, bmp.Width, bmp.Height, 0.20f);
 
-            var best = faces.OrderByDescending(f => f.Box.Width * f.Box.Height).First();
-            var lm = _landmarks!.Forward(bmp, best.Box);
-            using var aligned = bmp.Align(best.Box, lm.RotationAngle, true);
-            var emb = _embedder!.Forward(aligned);
-            return emb is { Length: > 0 } ? Normalize(emb) : null;
+            using var face = new Bitmap(112, 112);
+            using (var g = Graphics.FromImage(face))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(bmp, new Rectangle(0, 0, 112, 112), r, GraphicsUnit.Pixel);
+            }
+
+            var input = new DenseTensor<float>(new[] { 1, 3, 112, 112 });
+            for (int y = 0; y < 112; y++)
+                for (int x = 0; x < 112; x++)
+                {
+                    var p = face.GetPixel(x, y);
+                    input[0, 0, y, x] = (p.R - 127.5f) / 127.5f;
+                    input[0, 1, y, x] = (p.G - 127.5f) / 127.5f;
+                    input[0, 2, y, x] = (p.B - 127.5f) / 127.5f;
+                }
+
+            using var results = _session!.Run(new[] { NamedOnnxValue.CreateFromTensor(_input, input) });
+            var emb = results.First().AsEnumerable<float>().ToArray();
+            return emb.Length > 0 ? Normalize(emb) : null;
+        }
+        catch { return null; }
+    }
+
+    private static Rectangle Expand(Rectangle r, int w, int h, float frac)
+    {
+        int dx = (int)(r.Width * frac), dy = (int)(r.Height * frac);
+        int x = Math.Max(0, r.X - dx), y = Math.Max(0, r.Y - dy);
+        int rw = Math.Min(w - x, r.Width + 2 * dx), rh = Math.Min(h - y, r.Height + 2 * dy);
+        return new Rectangle(x, y, Math.Max(1, rw), Math.Max(1, rh));
+    }
+
+    private static Rectangle? DetectLargestFace(string path)
+    {
+        try
+        {
+            var detector = FaceDetector.CreateAsync().GetAwaiter().GetResult();
+            var sf = StorageFile.GetFileFromPathAsync(path).GetAwaiter().GetResult();
+            using IRandomAccessStream stream = sf.OpenAsync(FileAccessMode.Read).GetAwaiter().GetResult();
+            var decoder = BitmapDecoder.CreateAsync(stream).GetAwaiter().GetResult();
+            using var bmp = decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult();
+
+            var fmt = FaceDetector.GetSupportedBitmapPixelFormats().Contains(BitmapPixelFormat.Gray8)
+                ? BitmapPixelFormat.Gray8 : BitmapPixelFormat.Nv12;
+            SoftwareBitmap? conv = bmp.BitmapPixelFormat == fmt ? null : SoftwareBitmap.Convert(bmp, fmt);
+            IList<DetectedFace> faces;
+            try { faces = detector.DetectFacesAsync(conv ?? bmp).GetAwaiter().GetResult(); }
+            finally { conv?.Dispose(); }
+            if (faces.Count == 0) return null;
+            var b = faces.OrderByDescending(f => (long)f.FaceBox.Width * f.FaceBox.Height).First().FaceBox;
+            return new Rectangle((int)b.X, (int)b.Y, (int)b.Width, (int)b.Height);
         }
         catch { return null; }
     }
@@ -55,10 +136,10 @@ public static class FaceRecognizer
     {
         double sum = 0;
         foreach (var x in v) sum += x * x;
-        var norm = (float)Math.Sqrt(sum);
-        if (norm < 1e-9f) return v;
+        var n = (float)Math.Sqrt(sum);
+        if (n < 1e-9f) return v;
         var r = new float[v.Length];
-        for (int i = 0; i < v.Length; i++) r[i] = v[i] / norm;
+        for (int i = 0; i < v.Length; i++) r[i] = v[i] / n;
         return r;
     }
 
@@ -67,6 +148,6 @@ public static class FaceRecognizer
         if (a.Length != b.Length) return -1f;
         float dot = 0;
         for (int i = 0; i < a.Length; i++) dot += a[i] * b[i];
-        return dot; // inputs are L2-normalized, so dot == cosine similarity
+        return dot; // inputs are L2-normalized
     }
 }

@@ -26,6 +26,20 @@ accordance with the LGPL, you may replace this component with a compatible
 version.
 
 -------------------------------------------------------------------------------
+ONNX Runtime — Microsoft (Microsoft.ML.OnnxRuntime)
+License: MIT License
+https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+Used to run the optional face-recognition model on-device.
+
+-------------------------------------------------------------------------------
+Face-recognition model (MobileFaceNet / ArcFace, "buffalo_s")
+NOT bundled with this app. It is downloaded on demand, only if you enable face
+recognition, directly from its host (huggingface.co/immich-app/buffalo_s).
+The InsightFace pretrained models are provided for non-commercial research
+purposes only; by downloading it you agree to those terms. We do not
+redistribute the model.
+
+-------------------------------------------------------------------------------
 Windows runtime APIs — Microsoft Windows
 Windows.Media.Ocr (OCR), Windows.Data.Pdf (PDF rendering), and
 Windows.Media.FaceAnalysis (face detection) are part of the Windows operating

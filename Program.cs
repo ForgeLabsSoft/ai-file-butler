@@ -17,6 +17,9 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
+                case "--downloadmodel": // hidden: fetch the face model into the cache
+                    System.IO.File.WriteAllText("model-dl.txt", FaceRecognizer.DownloadModel() ? "ok" : "fail");
+                    return;
                 case "--enroll": // hidden: enroll a person from a photo (CLI/scripting)
                     if (args.Length >= 3)
                     {
