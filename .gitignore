@@ -16,3 +16,4 @@ undo_log.jsonl
 *.user
 Thumbs.db
 desktop.ini
+facetest/

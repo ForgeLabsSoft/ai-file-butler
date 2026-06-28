@@ -447,6 +447,102 @@ public sealed class WelcomeForm : Form
     }
 }
 
+/// <summary>Enroll people by example: add a few photos of a person and the app
+/// learns their face, then sorts matching photos into People/&lt;Name&gt;.</summary>
+public sealed class PeopleForm : Form
+{
+    private readonly ListBox _list = new();
+    private readonly TextBox _name = new();
+    private readonly Button _add;
+    private List<string> _names = new();
+
+    public PeopleForm()
+    {
+        Text = L.S("people_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterScreen;
+        Size = new Size(560, 520);
+        MinimumSize = new Size(440, 380);
+        BackColor = Color.White;
+        Font = new Font("Segoe UI", 9.5f);
+
+        var hint = new Label
+        {
+            Text = L.S("ppl_hint"), Dock = DockStyle.Top, Height = 44, ForeColor = Color.Gray,
+            Padding = new Padding(14, 10, 14, 0),
+        };
+        _list.Dock = DockStyle.Fill;
+        _list.IntegralHeight = false;
+
+        var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, ColumnCount = 2, RowCount = 2, AutoSize = true, Padding = new Padding(12, 8, 12, 10) };
+        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _name.Dock = DockStyle.Fill; _name.PlaceholderText = L.S("ppl_name");
+        _add = new Button
+        {
+            Text = L.S("ppl_add"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Padding = new Padding(10, 4, 10, 4), Tag = "primary", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
+        };
+        _add.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        _add.Click += (_, _) => AddPhoto();
+        var remove = new Button
+        {
+            Text = L.S("ppl_remove"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Padding = new Padding(10, 4, 10, 4), Margin = new Padding(0, 6, 0, 0),
+        };
+        remove.FlatAppearance.BorderColor = Color.LightGray;
+        remove.Click += (_, _) =>
+        {
+            if (_list.SelectedIndex >= 0 && _list.SelectedIndex < _names.Count)
+            { People.Remove(_names[_list.SelectedIndex]); Refresh3(); }
+        };
+        bottom.Controls.Add(_name, 0, 0);
+        bottom.Controls.Add(_add, 1, 0);
+        bottom.Controls.Add(remove, 0, 1);
+
+        Controls.Add(_list);
+        Controls.Add(bottom);
+        Controls.Add(hint);
+        Load += (_, _) => Refresh3();
+        Theme.Apply(this);
+    }
+
+    private void Refresh3()
+    {
+        _names = People.List().Select(p => p.Name).ToList();
+        _list.Items.Clear();
+        foreach (var (name, count) in People.List())
+            _list.Items.Add($"{name}   ({count})");
+    }
+
+    private void AddPhoto()
+    {
+        var nm = _name.Text.Trim();
+        if (nm.Length == 0) { _name.Focus(); return; }
+        using var dlg = new OpenFileDialog
+        { Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp;*.webp;*.heic;*.tif;*.tiff" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var path = dlg.FileName;
+        _add.Enabled = false; _add.Text = "…";
+        Task.Run(() => FaceRecognizer.EmbedDominantFace(path)).ContinueWith(t =>
+        {
+            if (IsDisposed) return;
+            BeginInvoke(() =>
+            {
+                _add.Enabled = true; _add.Text = L.S("ppl_add");
+                if (t.Result is float[] emb)
+                {
+                    People.Enroll(nm, emb); Refresh3();
+                    MessageBox.Show(this, string.Format(L.S("ppl_added"), nm), Text);
+                }
+                else MessageBox.Show(this, L.S("ppl_noface"), Text);
+            });
+        });
+    }
+}
+
 /// <summary>Shows the move history and lets the user undo any individual move.</summary>
 public sealed class HistoryForm : Form
 {

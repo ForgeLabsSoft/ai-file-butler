@@ -34,7 +34,7 @@ public static class Organizer
 
         var folder = Path.Combine(cfg.DestRoot, Config.FolderFor(s.Category));
         var sub = SubFolder(s, cfg, src);
-        if (!string.IsNullOrEmpty(sub)) folder = Path.Combine(folder, Slug.Make(sub, ""));
+        if (!string.IsNullOrEmpty(sub)) folder = Path.Combine(folder, SafePath(sub));
         var dst = Dedupe(Path.Combine(folder, s.Filename));
         return new Plan(src.FullName, dst, s.Category, s.Confidence, s.Reason, s.Backend);
     }

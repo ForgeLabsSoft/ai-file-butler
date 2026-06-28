@@ -17,6 +17,27 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
+                case "--enroll": // hidden: enroll a person from a photo (CLI/scripting)
+                    if (args.Length >= 3)
+                    {
+                        var emb = FaceRecognizer.EmbedDominantFace(args[2]);
+                        if (emb is not null) People.Enroll(args[1], emb);
+                    }
+                    return;
+                case "--faces": // hidden QA: pairwise face cosine similarities -> faces-result.txt
+                {
+                    var imgs = args.Skip(1).ToArray();
+                    var embs = imgs.Select(FaceRecognizer.EmbedDominantFace).ToArray();
+                    var sb = new System.Text.StringBuilder();
+                    for (int i = 0; i < imgs.Length; i++)
+                        sb.AppendLine($"{System.IO.Path.GetFileName(imgs[i])}: face={(embs[i] != null)}");
+                    for (int i = 0; i < imgs.Length; i++)
+                        for (int j = i + 1; j < imgs.Length; j++)
+                            if (embs[i] != null && embs[j] != null)
+                                sb.AppendLine($"cos({System.IO.Path.GetFileName(imgs[i])},{System.IO.Path.GetFileName(imgs[j])}) = {FaceRecognizer.Cosine(embs[i]!, embs[j]!):F3}");
+                    System.IO.File.WriteAllText("faces-result.txt", sb.ToString());
+                    return;
+                }
                 case "--settings":
                     ApplicationConfiguration.Initialize();
                     var cfg = Config.Load();
@@ -30,6 +51,7 @@ internal static class Program
                     Theme.IsDark = scfg.DarkMode;
                     Form sf = args.Length > 3 && args[3] == "welcome" ? new WelcomeForm()
                         : args.Length > 3 && args[3] == "history" ? new HistoryForm()
+                        : args.Length > 3 && args[3] == "people" ? new PeopleForm()
                         : new SettingsForm(scfg, new Watcher(scfg));
                     sf.Show();
                     Application.DoEvents();
@@ -67,6 +89,7 @@ internal sealed class ButlerContext : ApplicationContext
     private readonly ToolStripMenuItem _undoItem;
     private readonly ToolStripMenuItem _openItem;
     private readonly ToolStripMenuItem _historyItem;
+    private readonly ToolStripMenuItem _peopleItem;
     private readonly ToolStripMenuItem _helpItem;
     private readonly ToolStripMenuItem _quitItem;
     private SettingsForm? _settings;
@@ -77,6 +100,7 @@ internal sealed class ButlerContext : ApplicationContext
         _cfg = Config.Load();
         L.Lang = string.IsNullOrEmpty(_cfg.Language) ? "en" : _cfg.Language;
         Theme.IsDark = _cfg.DarkMode;
+        People.Threshold = (float)_cfg.FaceThreshold;
         _watcher = new Watcher(_cfg);
         _watcher.Notify += OnWatcherEvent;
         // Safety: on the very first run, stay in manual mode (don't auto-move)
@@ -94,6 +118,7 @@ internal sealed class ButlerContext : ApplicationContext
         _undoItem = new ToolStripMenuItem("", null, (_, _) => _watcher.UndoLast());
         _openItem = new ToolStripMenuItem("", null, (_, _) => OpenSorted());
         _historyItem = new ToolStripMenuItem("", null, (_, _) => new HistoryForm().Show());
+        _peopleItem = new ToolStripMenuItem("", null, (_, _) => new PeopleForm().Show());
         _helpItem = new ToolStripMenuItem("", null, (_, _) => new HelpForm().ShowDialog());
         _quitItem = new ToolStripMenuItem("", null, (_, _) => Quit());
 
@@ -112,6 +137,7 @@ internal sealed class ButlerContext : ApplicationContext
             _undoItem,
             _openItem,
             _historyItem,
+            _peopleItem,
             _helpItem,
             new ToolStripSeparator(),
             _startupItem,
@@ -189,6 +215,7 @@ internal sealed class ButlerContext : ApplicationContext
         _undoItem.Text = L.S("m_undo");
         _openItem.Text = L.S("m_open");
         _historyItem.Text = L.S("m_history");
+        _peopleItem.Text = L.S("m_people");
         _helpItem.Text = L.S("m_help");
         _startupItem.Text = L.S("startup");
         _quitItem.Text = L.S("m_quit");

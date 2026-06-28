@@ -23,9 +23,15 @@ public static class PhotoMeta
         return lat is double la && lon is double lo ? Geo.NearestCity(la, lo) : "Unknown Location";
     }
 
-    /// <summary>"People" if at least one face is detected, else "No People".</summary>
+    /// <summary>Recognize who's in the photo: "People/&lt;Name&gt;" for an enrolled
+    /// person, "People/Unknown" for an unrecognized face, or "" if no face.</summary>
     public static string PeopleFolder(FileInfo file)
-        => HasPeople(file) ? "People" : "No People";
+    {
+        var emb = FaceRecognizer.EmbedDominantFace(file.FullName);
+        if (emb is null) return HasPeople(file) ? "People/Unknown" : "";
+        var name = People.Identify(emb);
+        return name is null ? "People/Unknown" : "People/" + name;
+    }
 
     private static DateTime? ExifDate(FileInfo file)
     {
