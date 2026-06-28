@@ -67,26 +67,9 @@ public sealed class Watcher
                 foreach (var file in Eligible(dir))
                 {
                     var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
-                    Suggestion sug;
-                    var rule = _cfg.MatchRule(file.Name + "\n" + snippet);
-                    var learnedCat = rule is null ? _learner.Suggest(file.Name) : null;
-                    if (rule is not null)
-                    {
-                        var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
-                        sug = new Suggestion("rule", fname, 0.95, $"your rule: \"{rule.Match}\"", "rule")
-                        { FolderOverride = rule.Folder };
-                    }
-                    else if (learnedCat is not null)
-                    {
-                        var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
-                        sug = new Suggestion(learnedCat, fname, 0.95, "learned from your correction", "learned");
-                    }
-                    else
-                    {
-                        try { sug = clf.Classify(file, snippet); }
-                        catch (Exception ex) { Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}"); continue; }
-                    }
-
+                    var decided = Decide(file, snippet, clf);
+                    if (decided is null) continue;
+                    var sug = decided.Value;
                     if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
                     var plan = Organizer.BuildPlan(file, sug, _cfg);
                     plans.Add(plan);
@@ -108,6 +91,56 @@ public sealed class Watcher
                 Notify?.Invoke(EventKind.Organized, string.Format(L.S("n_organized"), plans.Count, names + extra));
             }
             return plans;
+        }
+    }
+
+    /// <summary>Decide where a file goes: user rule, then learned, then AI/rules.
+    /// Returns null to skip (e.g. the classifier errored).</summary>
+    private Suggestion? Decide(FileInfo file, string snippet, IClassifier clf)
+    {
+        var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
+        var rule = _cfg.MatchRule(file.Name + "\n" + snippet);
+        if (rule is not null)
+            return new Suggestion("rule", fname, 0.95, $"your rule: \"{rule.Match}\"", "rule") { FolderOverride = rule.Folder };
+        var learned = _learner.Suggest(file.Name);
+        if (learned is not null)
+            return new Suggestion(learned, fname, 0.95, "learned from your correction", "learned");
+        try { return clf.Classify(file, snippet); }
+        catch (Exception ex) { Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}"); return null; }
+    }
+
+    /// <summary>Organize an explicit set of files now (e.g. drag-and-dropped),
+    /// regardless of folder/age settings. Runs on the calling thread.</summary>
+    public void OrganizeDropped(IEnumerable<string> paths)
+    {
+        lock (_lock)
+        {
+            var clf = ClassifierFactory.Get(_cfg);
+            Backend = clf.Backend;
+            var plans = new List<Plan>();
+            foreach (var p in paths)
+            {
+                if (!File.Exists(p)) continue;
+                var file = new FileInfo(p);
+                if (_cfg.IgnoreExts.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)) continue;
+                var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
+                var decided = Decide(file, snippet, clf);
+                if (decided is null) continue;
+                var sug = decided.Value;
+                if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
+                var plan = Organizer.BuildPlan(file, sug, _cfg);
+                Organizer.Apply(plan);
+                _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
+                SessionCount++;
+                plans.Add(plan);
+            }
+            if (plans.Count > 0)
+            {
+                LastBatchSize = plans.Count;
+                var names = string.Join(", ", plans.Take(3).Select(p => p.DstName));
+                var extra = plans.Count > 3 ? $" +{plans.Count - 3} more" : "";
+                Notify?.Invoke(EventKind.Organized, string.Format(L.S("n_organized"), plans.Count, names + extra));
+            }
         }
     }
 

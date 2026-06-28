@@ -31,7 +31,7 @@ public sealed class SettingsForm : Form
     private readonly TextBox _ruleFolder = new();
 
     private static readonly string[] MusicOpts = { "artist", "genre", "year", "alpha", "none" };
-    private static readonly string[] MovieOpts = { "genre", "actor", "year", "alpha", "none" };
+    private static readonly string[] MovieOpts = { "genre", "actor", "year", "date", "location", "alpha", "none" };
     private static readonly string[] PhotoOpts = { "date", "location", "person", "alpha", "none" };
 
     // controls whose .Text follows the language
@@ -58,6 +58,27 @@ public sealed class SettingsForm : Form
         BuildLayout();
         LoadValues();
         Localize();
+        EnableDrop(this); // drag & drop files anywhere to organize them now
+    }
+
+    private void EnableDrop(Control c)
+    {
+        if (c is not (TextBox or ComboBox or ListBox or NumericUpDown))
+        {
+            c.AllowDrop = true;
+            c.DragEnter += (_, e) =>
+            { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
+            c.DragDrop += OnFilesDropped;
+        }
+        foreach (Control child in c.Controls) EnableDrop(child);
+    }
+
+    private void OnFilesDropped(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetData(DataFormats.FileDrop) is not string[] files) return;
+        var real = files.Where(File.Exists).ToArray();
+        if (real.Length == 0) return;
+        Task.Run(() => _watcher.OrganizeDropped(real)); // off the UI thread (AI is slow)
     }
 
     private Control Reg(Control c, string key) { _loc.Add((c, key)); return c; }
@@ -77,6 +98,16 @@ public sealed class SettingsForm : Form
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(16, 16, 16, 0) };
         Controls.Add(scroll);
         Controls.SetChildIndex(scroll, 0);
+
+        // drop hint (lands at the very top of the form)
+        var dropHint = new Label
+        {
+            Dock = DockStyle.Top, Height = 26, TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Accent, BackColor = Color.FromArgb(238, 245, 255),
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+        };
+        Reg(dropHint, "drop_hint");
+        Controls.Add(dropHint);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Width = 1 };
         root.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;

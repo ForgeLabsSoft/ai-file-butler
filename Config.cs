@@ -22,6 +22,9 @@ public sealed class Config
         ("code",      "Code"),
         ("music",     "Music"),
         ("movie",     "Movies"),
+        ("ebook",     "Books"),
+        ("font",      "Fonts"),
+        ("design",    "Design"),
         ("misc",      "Misc"),
     };
 

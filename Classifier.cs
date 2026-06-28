@@ -153,19 +153,48 @@ public sealed class RuleClassifier : IClassifier
 
     private static readonly Dictionary<string, string> ExtCategory = new(StringComparer.OrdinalIgnoreCase)
     {
-        [".jpg"] = "image", [".jpeg"] = "image", [".png"] = "image", [".gif"] = "image",
-        [".webp"] = "image", [".bmp"] = "image", [".heic"] = "image", [".svg"] = "image",
-        [".exe"] = "installer", [".msi"] = "installer", [".msix"] = "installer", [".appx"] = "installer",
-        [".zip"] = "archive", [".rar"] = "archive", [".7z"] = "archive", [".tar"] = "archive",
-        [".gz"] = "archive", [".iso"] = "archive",
-        [".mp4"] = "movie", [".mkv"] = "movie", [".mov"] = "movie", [".avi"] = "movie", [".wmv"] = "movie", [".webm"] = "movie",
-        [".mp3"] = "music", [".wav"] = "music", [".flac"] = "music", [".m4a"] = "music", [".aac"] = "music", [".ogg"] = "music",
-        [".py"] = "code", [".js"] = "code", [".ts"] = "code", [".cs"] = "code", [".java"] = "code",
-        [".c"] = "code", [".cpp"] = "code", [".go"] = "code", [".rs"] = "code", [".sql"] = "code",
-        [".sh"] = "code", [".ps1"] = "code",
-        [".doc"] = "document", [".docx"] = "document", [".txt"] = "document", [".md"] = "document",
-        [".rtf"] = "document", [".odt"] = "document", [".pptx"] = "document", [".xlsx"] = "document",
-        [".csv"] = "document", [".pdf"] = "document",
+        // Images / photos
+        [".jpg"]="image",[".jpeg"]="image",[".jfif"]="image",[".png"]="image",[".gif"]="image",
+        [".webp"]="image",[".bmp"]="image",[".heic"]="image",[".heif"]="image",[".svg"]="image",
+        [".tif"]="image",[".tiff"]="image",[".ico"]="image",[".avif"]="image",[".raw"]="image",
+        [".cr2"]="image",[".cr3"]="image",[".nef"]="image",[".arw"]="image",[".dng"]="image",[".orf"]="image",[".rw2"]="image",
+        // Video
+        [".mp4"]="movie",[".mkv"]="movie",[".mov"]="movie",[".avi"]="movie",[".wmv"]="movie",[".webm"]="movie",
+        [".m4v"]="movie",[".mpg"]="movie",[".mpeg"]="movie",[".3gp"]="movie",[".flv"]="movie",[".ts"]="movie",
+        [".m2ts"]="movie",[".mts"]="movie",[".vob"]="movie",[".ogv"]="movie",[".rm"]="movie",[".rmvb"]="movie",[".divx"]="movie",
+        [".srt"]="movie",[".sub"]="movie",[".ass"]="movie",[".vtt"]="movie",[".ssa"]="movie",
+        // Audio / music
+        [".mp3"]="music",[".wav"]="music",[".flac"]="music",[".m4a"]="music",[".aac"]="music",[".ogg"]="music",
+        [".wma"]="music",[".opus"]="music",[".aiff"]="music",[".aif"]="music",[".alac"]="music",[".mid"]="music",
+        [".midi"]="music",[".amr"]="music",[".ape"]="music",[".dsf"]="music",
+        // Installers / packages
+        [".exe"]="installer",[".msi"]="installer",[".msix"]="installer",[".appx"]="installer",[".appxbundle"]="installer",
+        [".apk"]="installer",[".aab"]="installer",[".deb"]="installer",[".rpm"]="installer",[".dmg"]="installer",
+        [".pkg"]="installer",[".bat"]="installer",[".cmd"]="installer",[".jar"]="installer",
+        // Archives / disk images
+        [".zip"]="archive",[".rar"]="archive",[".7z"]="archive",[".tar"]="archive",[".gz"]="archive",
+        [".bz2"]="archive",[".xz"]="archive",[".tgz"]="archive",[".zst"]="archive",[".lz"]="archive",[".lzma"]="archive",
+        [".cab"]="archive",[".arj"]="archive",[".iso"]="archive",[".img"]="archive",[".vhd"]="archive",[".vhdx"]="archive",
+        // Code / dev
+        [".py"]="code",[".js"]="code",[".mjs"]="code",[".ts"]="code",[".tsx"]="code",[".jsx"]="code",[".cs"]="code",
+        [".java"]="code",[".kt"]="code",[".c"]="code",[".h"]="code",[".cpp"]="code",[".cc"]="code",[".hpp"]="code",
+        [".go"]="code",[".rs"]="code",[".rb"]="code",[".php"]="code",[".swift"]="code",[".scala"]="code",[".lua"]="code",
+        [".pl"]="code",[".r"]="code",[".dart"]="code",[".vue"]="code",[".sql"]="code",[".sh"]="code",[".ps1"]="code",
+        [".html"]="code",[".htm"]="code",[".css"]="code",[".scss"]="code",[".json"]="code",[".xml"]="code",
+        [".yaml"]="code",[".yml"]="code",[".toml"]="code",[".ini"]="code",[".gradle"]="code",[".ipynb"]="code",
+        // Documents / office / data
+        [".doc"]="document",[".docx"]="document",[".txt"]="document",[".md"]="document",[".rtf"]="document",
+        [".odt"]="document",[".pptx"]="document",[".ppt"]="document",[".odp"]="document",[".xlsx"]="document",
+        [".xls"]="document",[".ods"]="document",[".csv"]="document",[".tsv"]="document",[".pdf"]="document",
+        [".pages"]="document",[".numbers"]="document",[".key"]="document",[".tex"]="document",[".log"]="document",
+        // Ebooks
+        [".epub"]="ebook",[".mobi"]="ebook",[".azw"]="ebook",[".azw3"]="ebook",[".fb2"]="ebook",[".djvu"]="ebook",[".cbz"]="ebook",[".cbr"]="ebook",
+        // Fonts
+        [".ttf"]="font",[".otf"]="font",[".woff"]="font",[".woff2"]="font",[".eot"]="font",[".fon"]="font",
+        // Design / 3D / CAD
+        [".psd"]="design",[".ai"]="design",[".xd"]="design",[".fig"]="design",[".sketch"]="design",[".indd"]="design",
+        [".eps"]="design",[".cdr"]="design",[".afphoto"]="design",[".afdesign"]="design",
+        [".stl"]="design",[".obj"]="design",[".fbx"]="design",[".blend"]="design",[".dwg"]="design",[".dxf"]="design",[".step"]="design",[".3mf"]="design",
     };
 
     private static readonly Dictionary<string, string[]> Keywords = new()

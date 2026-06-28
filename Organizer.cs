@@ -48,7 +48,13 @@ public static class Organizer
             case "music":
                 return Pick(cfg.MusicBy, s, s.Person);
             case "movie":
-                return Pick(cfg.MovieBy, s, s.Person);
+                // films use AI genre/actor/year; phone videos use date/location
+                return cfg.MovieBy switch
+                {
+                    "date" => PhotoMeta.DateFolder(src),
+                    "location" => PhotoMeta.LocationFolder(src),
+                    _ => Pick(cfg.MovieBy, s, s.Person),
+                };
             case "image":
                 return cfg.ImageBy switch
                 {
