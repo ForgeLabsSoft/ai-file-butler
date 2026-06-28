@@ -52,10 +52,11 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 2. The 🤵 icon appears next to your clock. Right-click it → **Settings…**
 3. Pick the folders to watch and you're done.
 
-> **"Windows protected your PC"?** That's expected — the app isn't code-signed yet.
-> Click **More info → Run anyway**. It's safe and 100% offline; a signing
-> certificate is on the way. (You can verify it yourself on
-> [VirusTotal](https://www.virustotal.com).)
+> **"Windows protected your PC"?** During the transition to signed builds you may
+> still see this — click **More info → Run anyway**. It's safe and 100% offline.
+> (You can verify it yourself on [VirusTotal](https://www.virustotal.com).)
+> Free code signing for this open-source project is provided by the
+> [SignPath Foundation](https://signpath.org).
 
 > First run starts in **manual mode** — nothing moves until you choose a folder and
 > click **Organize now**, then enable Auto-organize when you're happy.
@@ -91,6 +92,12 @@ Change it any time in **Settings → Language**.
 
 The AI model runs **on your machine** via [Ollama](https://ollama.com). No servers,
 no accounts, no uploads, no telemetry. Your documents never leave your computer.
+
+## 🔏 Code signing
+
+Free code signing for this open-source project is generously provided by the
+**[SignPath Foundation](https://signpath.org)**, with a certificate issued by
+SignPath. Builds are produced reproducibly via GitHub Actions.
 
 ## 📄 License & privacy
 
