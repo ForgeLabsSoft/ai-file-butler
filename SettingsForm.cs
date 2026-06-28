@@ -19,6 +19,7 @@ public sealed class SettingsForm : Form
     private readonly Label _aiStatus = new();
     private readonly CheckBox _auto = new();
     private readonly CheckBox _startup = new();
+    private readonly CheckBox _dark = new();
     private readonly NumericUpDown _poll = new();
     private readonly NumericUpDown _minAge = new();
     private readonly NumericUpDown _review = new();
@@ -59,6 +60,8 @@ public sealed class SettingsForm : Form
         LoadValues();
         Localize();
         EnableDrop(this); // drag & drop files anywhere to organize them now
+        Theme.IsDark = _cfg.DarkMode;
+        Theme.Apply(this);
     }
 
     private void EnableDrop(Control c)
@@ -187,14 +190,16 @@ public sealed class SettingsForm : Form
         var rev = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 1, AutoSize = true };
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
-        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, AutoSize = true };
-        _auto.AutoSize = true; _startup.AutoSize = true;
+        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, AutoSize = true };
+        _auto.AutoSize = true; _startup.AutoSize = true; _dark.AutoSize = true;
+        _dark.CheckedChanged += (_, _) => { Theme.IsDark = _dark.Checked; Theme.Apply(this); };
         bWrap.Controls.Add(Reg(_auto, "auto"), 0, 0);
         bWrap.Controls.Add(Reg(_startup, "startup"), 0, 1);
-        bWrap.Controls.Add(grid, 0, 2);
-        bWrap.Controls.Add(rev, 0, 3);
+        bWrap.Controls.Add(Reg(_dark, "dark_mode"), 0, 2);
+        bWrap.Controls.Add(grid, 0, 3);
+        bWrap.Controls.Add(rev, 0, 4);
         gBehavior.Controls.Add(bWrap);
-        gBehavior.Height = 160;
+        gBehavior.Height = 188;
         root.Controls.Add(gBehavior);
 
         // sorting schemes (music / movies / invoices)
@@ -268,6 +273,7 @@ public sealed class SettingsForm : Form
             Text = text, AutoSize = true, Padding = new Padding(10, 4, 10, 4),
             FlatStyle = FlatStyle.Flat, Margin = new Padding(4), Cursor = Cursors.Hand,
             Font = new Font("Segoe UI", 9.5f, primary ? FontStyle.Bold : FontStyle.Regular),
+            Tag = primary ? "primary" : null,
         };
         b.FlatAppearance.BorderColor = primary ? Accent : Color.LightGray;
         b.BackColor = primary ? Accent : Color.White;
@@ -284,6 +290,7 @@ public sealed class SettingsForm : Form
         _model.Text = _cfg.OllamaModel;
         _auto.Checked = _watcher.Auto;
         _startup.Checked = Startup.IsEnabled;
+        _dark.Checked = _cfg.DarkMode;
         _poll.Value = Math.Clamp(_cfg.PollIntervalSeconds, (int)_poll.Minimum, (int)_poll.Maximum);
         _minAge.Value = Math.Clamp(_cfg.MinAgeSeconds, (int)_minAge.Minimum, (int)_minAge.Maximum);
         _review.Value = Math.Clamp(_cfg.ReviewThreshold, (int)_review.Minimum, (int)_review.Maximum);
@@ -366,6 +373,7 @@ public sealed class SettingsForm : Form
         _cfg.SeparateInvoiceParties = _sepParties.Checked;
         _cfg.Rules = _rulesList.Items.Cast<RuleEntry>().ToList();
         _cfg.AutoOrganize = _auto.Checked; // persist the auto-move state
+        _cfg.DarkMode = _dark.Checked; Theme.IsDark = _dark.Checked;
         if (_lang.SelectedIndex >= 0) _cfg.Language = L.Languages[_lang.SelectedIndex].Code;
         try { _cfg.Save(); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "AI File Butler"); return; }
@@ -420,6 +428,7 @@ public sealed class WelcomeForm : Form
         Controls.Add(bar);
         AcceptButton = openBtn;
         Shown += (_, _) => openBtn.Focus();
+        Theme.Apply(this);
     }
 
     private Button Btn(string text, WelcomeChoice choice, bool primary)
@@ -427,7 +436,7 @@ public sealed class WelcomeForm : Form
         var b = new Button
         {
             Text = text, AutoSize = true, Padding = new Padding(10, 5, 10, 5), FlatStyle = FlatStyle.Flat,
-            Margin = new Padding(4), Cursor = Cursors.Hand,
+            Margin = new Padding(4), Cursor = Cursors.Hand, Tag = primary ? "primary" : null,
             Font = new Font("Segoe UI", 9.5f, primary ? FontStyle.Bold : FontStyle.Regular),
             BackColor = primary ? Color.FromArgb(43, 139, 234) : Color.White,
             ForeColor = primary ? Color.White : Color.Black,
@@ -465,7 +474,7 @@ public sealed class HistoryForm : Form
         {
             Text = L.S("hist_undo"), AutoSize = true, Padding = new Padding(12, 5, 12, 5),
             FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White, Tag = "primary",
         };
         undo.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
         undo.Click += (_, _) => UndoSelected();
@@ -474,6 +483,7 @@ public sealed class HistoryForm : Form
         Controls.Add(_list);
         Controls.Add(bar);
         Load += (_, _) => Refresh2();
+        Theme.Apply(this);
     }
 
     private void Refresh2()
@@ -532,5 +542,6 @@ public sealed class HelpForm : Form
         Controls.Add(pad);
         Controls.Add(title);
         Controls.Add(close);
+        Theme.Apply(this);
     }
 }

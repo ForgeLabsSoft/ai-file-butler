@@ -27,6 +27,7 @@ internal static class Program
                     var scfg = Config.Load();
                     var lang = args.Length > 1 ? args[1] : "en";
                     scfg.Language = lang; L.Lang = lang;
+                    Theme.IsDark = scfg.DarkMode;
                     Form sf = args.Length > 3 && args[3] == "welcome" ? new WelcomeForm()
                         : args.Length > 3 && args[3] == "history" ? new HistoryForm()
                         : new SettingsForm(scfg, new Watcher(scfg));
@@ -75,6 +76,7 @@ internal sealed class ButlerContext : ApplicationContext
         _ui = SynchronizationContext.Current ?? new SynchronizationContext();
         _cfg = Config.Load();
         L.Lang = string.IsNullOrEmpty(_cfg.Language) ? "en" : _cfg.Language;
+        Theme.IsDark = _cfg.DarkMode;
         _watcher = new Watcher(_cfg);
         _watcher.Notify += OnWatcherEvent;
         // Safety: on the very first run, stay in manual mode (don't auto-move)

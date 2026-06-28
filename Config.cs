@@ -56,6 +56,7 @@ public sealed class Config
 
     public bool AutoOrganize { get; set; } = true;   // persisted auto-move state
     public bool FirstRunDone { get; set; } = false;  // show the welcome screen once
+    public bool DarkMode { get; set; } = false;      // dark theme for the windows
 
     // User-defined rules: if a file's name or content contains Match, send it to
     // Folder (a path under the destination, e.g. "Invoices/Orange" or "University").
