@@ -27,8 +27,8 @@ internal static class Program
                     var scfg = Config.Load();
                     var lang = args.Length > 1 ? args[1] : "en";
                     scfg.Language = lang; L.Lang = lang;
-                    Form sf = args.Length > 3 && args[3] == "welcome"
-                        ? new WelcomeForm()
+                    Form sf = args.Length > 3 && args[3] == "welcome" ? new WelcomeForm()
+                        : args.Length > 3 && args[3] == "history" ? new HistoryForm()
                         : new SettingsForm(scfg, new Watcher(scfg));
                     sf.Show();
                     Application.DoEvents();
@@ -65,6 +65,7 @@ internal sealed class ButlerContext : ApplicationContext
     private readonly ToolStripMenuItem _organizeItem;
     private readonly ToolStripMenuItem _undoItem;
     private readonly ToolStripMenuItem _openItem;
+    private readonly ToolStripMenuItem _historyItem;
     private readonly ToolStripMenuItem _helpItem;
     private readonly ToolStripMenuItem _quitItem;
     private SettingsForm? _settings;
@@ -90,6 +91,7 @@ internal sealed class ButlerContext : ApplicationContext
         _organizeItem = new ToolStripMenuItem("", null, (_, _) => OrganizeNow());
         _undoItem = new ToolStripMenuItem("", null, (_, _) => _watcher.UndoLast());
         _openItem = new ToolStripMenuItem("", null, (_, _) => OpenSorted());
+        _historyItem = new ToolStripMenuItem("", null, (_, _) => new HistoryForm().Show());
         _helpItem = new ToolStripMenuItem("", null, (_, _) => new HelpForm().ShowDialog());
         _quitItem = new ToolStripMenuItem("", null, (_, _) => Quit());
 
@@ -107,6 +109,7 @@ internal sealed class ButlerContext : ApplicationContext
             _organizeItem,
             _undoItem,
             _openItem,
+            _historyItem,
             _helpItem,
             new ToolStripSeparator(),
             _startupItem,
@@ -183,6 +186,7 @@ internal sealed class ButlerContext : ApplicationContext
         _organizeItem.Text = L.S("m_organize");
         _undoItem.Text = L.S("m_undo");
         _openItem.Text = L.S("m_open");
+        _historyItem.Text = L.S("m_history");
         _helpItem.Text = L.S("m_help");
         _startupItem.Text = L.S("startup");
         _quitItem.Text = L.S("m_quit");

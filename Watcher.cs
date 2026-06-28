@@ -68,8 +68,15 @@ public sealed class Watcher
                 {
                     var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
                     Suggestion sug;
-                    var learnedCat = _learner.Suggest(file.Name);
-                    if (learnedCat is not null)
+                    var rule = _cfg.MatchRule(file.Name + "\n" + snippet);
+                    var learnedCat = rule is null ? _learner.Suggest(file.Name) : null;
+                    if (rule is not null)
+                    {
+                        var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
+                        sug = new Suggestion("rule", fname, 0.95, $"your rule: \"{rule.Match}\"", "rule")
+                        { FolderOverride = rule.Folder };
+                    }
+                    else if (learnedCat is not null)
                     {
                         var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
                         sug = new Suggestion(learnedCat, fname, 0.95, "learned from your correction", "learned");

@@ -53,6 +53,11 @@ public sealed class Config
 
     public bool AutoOrganize { get; set; } = true;   // persisted auto-move state
     public bool FirstRunDone { get; set; } = false;  // show the welcome screen once
+
+    // User-defined rules: if a file's name or content contains Match, send it to
+    // Folder (a path under the destination, e.g. "Invoices/Orange" or "University").
+    // These win over the AI/rules classifier.
+    public List<RuleEntry> Rules { get; set; } = new();
     // If the classifier's confidence (%) is below this, set the file aside in
     // "_Review" instead of guessing. 0 = always sort, never review.
     public int ReviewThreshold { get; set; } = 55;
@@ -95,6 +100,25 @@ public sealed class Config
         var json = JsonSerializer.Serialize(this, ConfigJson.Default.Config);
         File.WriteAllText(ConfigPath, json);
     }
+
+    /// <summary>First user rule whose Match is found in the text, or null.</summary>
+    public RuleEntry? MatchRule(string nameAndContent)
+    {
+        var hay = nameAndContent.ToLowerInvariant();
+        foreach (var r in Rules)
+            if (!string.IsNullOrWhiteSpace(r.Match) && !string.IsNullOrWhiteSpace(r.Folder)
+                && hay.Contains(r.Match.ToLowerInvariant()))
+                return r;
+        return null;
+    }
+}
+
+public sealed class RuleEntry
+{
+    public string Match { get; set; } = "";   // keyword in filename or content
+    public string Folder { get; set; } = "";  // destination sub-path
+
+    public override string ToString() => $"\"{Match}\"  →  {Folder}";
 }
 
 // Source-generated JSON context — needed for trimming/single-file safety.

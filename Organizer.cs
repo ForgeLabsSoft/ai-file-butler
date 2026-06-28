@@ -16,6 +16,14 @@ public static class Organizer
 
     public static Plan BuildPlan(FileInfo src, Suggestion s, Config cfg)
     {
+        // A user rule routes straight to an explicit folder, bypassing categories.
+        if (!string.IsNullOrWhiteSpace(s.FolderOverride))
+        {
+            var rf = Path.Combine(cfg.DestRoot, SafePath(s.FolderOverride));
+            var rdst2 = Dedupe(Path.Combine(rf, s.Filename));
+            return new Plan(src.FullName, rdst2, s.Category, s.Confidence, s.Reason, s.Backend);
+        }
+
         // When unsure, don't guess — set the file aside for the user to review.
         if (cfg.ReviewThreshold > 0 && s.Confidence * 100 < cfg.ReviewThreshold)
         {
@@ -83,6 +91,17 @@ public static class Organizer
         return char.IsDigit(c) ? "0-9" : c.ToString();
     }
 
+    // Turn a user-entered "Invoices/Orange" into a safe nested relative path.
+    private static string SafePath(string raw)
+    {
+        var parts = raw.Split('/', '\\', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                       .Select(p => Slug.Make(p, ""))
+                       .Where(p => p.Length > 0)
+                       .Take(5);
+        var path = Path.Combine(parts.ToArray());
+        return string.IsNullOrEmpty(path) ? "_Rules" : path;
+    }
+
     private static string Dedupe(string dst)
     {
         if (!File.Exists(dst)) return dst;
@@ -136,4 +155,45 @@ public static class Organizer
         File.WriteAllLines(UndoLog, lines);
         return reverted;
     }
+
+    /// <summary>The move history, newest first (for the History window).</summary>
+    public static List<HistoryItem> History(int max = 300)
+    {
+        var items = new List<HistoryItem>();
+        if (!File.Exists(UndoLog)) return items;
+        foreach (var line in File.ReadAllLines(UndoLog))
+        {
+            if (line.Length == 0) continue;
+            try
+            {
+                using var d = JsonDocument.Parse(line);
+                var r = d.RootElement;
+                items.Add(new HistoryItem(
+                    r.GetProperty("ts").GetString() ?? "",
+                    r.GetProperty("from").GetString() ?? "",
+                    r.GetProperty("to").GetString() ?? "", line));
+            }
+            catch { /* skip malformed line */ }
+        }
+        items.Reverse(); // newest first
+        return max > 0 && items.Count > max ? items.GetRange(0, max) : items;
+    }
+
+    /// <summary>Reverse one specific move and drop it from the log.</summary>
+    public static bool UndoOne(HistoryItem item)
+    {
+        if (!File.Exists(UndoLog)) return false;
+        bool moved = false;
+        if (File.Exists(item.To))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(item.From)!);
+            File.Move(item.To, Dedupe(item.From));
+            moved = true;
+        }
+        var lines = File.ReadAllLines(UndoLog).Where(l => l.Length > 0 && l != item.Raw).ToList();
+        File.WriteAllLines(UndoLog, lines);
+        return moved;
+    }
 }
+
+public sealed record HistoryItem(string Ts, string From, string To, string Raw);

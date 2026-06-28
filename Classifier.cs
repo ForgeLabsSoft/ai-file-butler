@@ -14,6 +14,9 @@ public readonly record struct Suggestion(
     public string? Genre { get; init; }
     public string? Person { get; init; }
     public string? Party { get; init; }
+    // Set by a user rule: an explicit destination sub-path that overrides the
+    // category/scheme folder entirely.
+    public string? FolderOverride { get; init; }
 }
 
 public interface IClassifier

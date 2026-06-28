@@ -26,6 +26,9 @@ public sealed class SettingsForm : Form
     private readonly ComboBox _movieBy = new();
     private readonly ComboBox _photoBy = new();
     private readonly CheckBox _sepParties = new();
+    private readonly ListBox _rulesList = new();
+    private readonly TextBox _ruleMatch = new();
+    private readonly TextBox _ruleFolder = new();
 
     private static readonly string[] MusicOpts = { "artist", "genre", "year", "alpha", "none" };
     private static readonly string[] MovieOpts = { "genre", "actor", "year", "alpha", "none" };
@@ -183,6 +186,38 @@ public sealed class SettingsForm : Form
         gSort.Controls.Add(sGrid);
         gSort.Height = 160;
         root.Controls.Add(gSort);
+
+        // my rules (keyword -> folder)
+        var gRules = Group("rules");
+        var rWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, AutoSize = true };
+        rWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        rWrap.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _rulesList.Dock = DockStyle.Fill; _rulesList.IntegralHeight = false; _rulesList.Height = 90;
+        rWrap.Controls.Add(_rulesList, 0, 0);
+        rWrap.Controls.Add(Reg(MakeButton("", (_, _) => { if (_rulesList.SelectedIndex >= 0) _rulesList.Items.RemoveAt(_rulesList.SelectedIndex); }, false), "remove"), 1, 0);
+        var addRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, AutoSize = true };
+        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _ruleMatch.Dock = DockStyle.Fill; _ruleFolder.Dock = DockStyle.Fill;
+        addRow.Controls.Add(_ruleMatch, 0, 0);
+        addRow.Controls.Add(_ruleFolder, 1, 0);
+        addRow.Controls.Add(Reg(MakeButton("", (_, _) => AddRule(), false), "rule_add"), 2, 0);
+        rWrap.Controls.Add(addRow, 0, 1); rWrap.SetColumnSpan(addRow, 2);
+        rWrap.Controls.Add(Reg(new Label { AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(2, 4, 0, 0) }, "rule_hint"), 0, 2);
+        rWrap.SetColumnSpan(rWrap.GetControlFromPosition(0, 2)!, 2);
+        gRules.Controls.Add(rWrap);
+        gRules.Height = 200;
+        root.Controls.Add(gRules);
+    }
+
+    private void AddRule()
+    {
+        var m = _ruleMatch.Text.Trim();
+        var f = _ruleFolder.Text.Trim();
+        if (m.Length == 0 || f.Length == 0) return;
+        _rulesList.Items.Add(new RuleEntry { Match = m, Folder = f });
+        _ruleMatch.Clear(); _ruleFolder.Clear();
     }
 
     private GroupBox Group(string key)
@@ -223,6 +258,8 @@ public sealed class SettingsForm : Form
         _review.Value = Math.Clamp(_cfg.ReviewThreshold, (int)_review.Minimum, (int)_review.Maximum);
         _musicBy.Tag = _cfg.MusicBy; _movieBy.Tag = _cfg.MovieBy; _photoBy.Tag = _cfg.ImageBy;
         _sepParties.Checked = _cfg.SeparateInvoiceParties;
+        _rulesList.Items.Clear();
+        foreach (var r in _cfg.Rules) _rulesList.Items.Add(r);
         var idx = Array.FindIndex(L.Languages, l => l.Code == L.Lang);
         _lang.SelectedIndex = idx < 0 ? 0 : idx;
     }
@@ -230,6 +267,8 @@ public sealed class SettingsForm : Form
     private void Localize()
     {
         foreach (var (c, key) in _loc) c.Text = L.S(key);
+        _ruleMatch.PlaceholderText = L.S("rule_match");
+        _ruleFolder.PlaceholderText = L.S("rule_folder");
         PopulateScheme(_musicBy, MusicOpts);
         PopulateScheme(_movieBy, MovieOpts);
         PopulateScheme(_photoBy, PhotoOpts);
@@ -294,6 +333,7 @@ public sealed class SettingsForm : Form
         if (_movieBy.SelectedIndex >= 0) _cfg.MovieBy = MovieOpts[_movieBy.SelectedIndex];
         if (_photoBy.SelectedIndex >= 0) _cfg.ImageBy = PhotoOpts[_photoBy.SelectedIndex];
         _cfg.SeparateInvoiceParties = _sepParties.Checked;
+        _cfg.Rules = _rulesList.Items.Cast<RuleEntry>().ToList();
         _cfg.AutoOrganize = _auto.Checked; // persist the auto-move state
         if (_lang.SelectedIndex >= 0) _cfg.Language = L.Languages[_lang.SelectedIndex].Code;
         try { _cfg.Save(); }
@@ -365,6 +405,69 @@ public sealed class WelcomeForm : Form
         b.Click += (_, _) => { Choice = choice; Close(); };
         return b;
     }
+}
+
+/// <summary>Shows the move history and lets the user undo any individual move.</summary>
+public sealed class HistoryForm : Form
+{
+    private readonly ListView _list = new();
+
+    public HistoryForm()
+    {
+        Text = L.S("history_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterScreen;
+        Size = new Size(760, 520);
+        MinimumSize = new Size(520, 360);
+        BackColor = Color.White;
+        Font = new Font("Segoe UI", 9.5f);
+
+        _list.View = View.Details;
+        _list.FullRowSelect = true;
+        _list.Dock = DockStyle.Fill;
+        _list.Columns.Add(L.S("hist_file"), 240);
+        _list.Columns.Add(L.S("hist_dest"), 340);
+        _list.Columns.Add(L.S("hist_when"), 140);
+
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 50, Padding = new Padding(10, 8, 10, 8) };
+        var undo = new Button
+        {
+            Text = L.S("hist_undo"), AutoSize = true, Padding = new Padding(12, 5, 12, 5),
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
+        };
+        undo.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        undo.Click += (_, _) => UndoSelected();
+        bar.Controls.Add(undo);
+
+        Controls.Add(_list);
+        Controls.Add(bar);
+        Load += (_, _) => Refresh2();
+    }
+
+    private void Refresh2()
+    {
+        _list.Items.Clear();
+        var hist = Organizer.History();
+        foreach (var h in hist)
+        {
+            var when = DateTimeOffset.TryParse(h.Ts, out var dt) ? dt.LocalDateTime.ToString("g") : h.Ts;
+            var item = new ListViewItem(new[] { Path.GetFileName(h.To), TrimMid(h.To), when }) { Tag = h };
+            _list.Items.Add(item);
+        }
+        if (hist.Count == 0)
+            _list.Items.Add(new ListViewItem(new[] { L.S("hist_empty"), "", "" }));
+    }
+
+    private void UndoSelected()
+    {
+        var picked = _list.SelectedItems.Cast<ListViewItem>()
+            .Select(i => i.Tag as HistoryItem).Where(h => h is not null).Cast<HistoryItem>().ToList();
+        foreach (var h in picked) Organizer.UndoOne(h);
+        Refresh2();
+    }
+
+    private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "…" + p[^30..];
 }
 
 /// <summary>A simple localized Help window explaining how the program works.</summary>
