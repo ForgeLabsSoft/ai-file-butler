@@ -20,6 +20,7 @@ public sealed class SettingsForm : Form
     private readonly CheckBox _auto = new();
     private readonly CheckBox _startup = new();
     private readonly CheckBox _dark = new();
+    private readonly CheckBox _expiryScan = new();
     private readonly NumericUpDown _poll = new();
     private readonly NumericUpDown _minAge = new();
     private readonly NumericUpDown _review = new();
@@ -199,16 +200,17 @@ public sealed class SettingsForm : Form
         var rev = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 1, AutoSize = true };
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
-        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, AutoSize = true };
-        _auto.AutoSize = true; _startup.AutoSize = true; _dark.AutoSize = true;
+        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, AutoSize = true };
+        _auto.AutoSize = true; _startup.AutoSize = true; _dark.AutoSize = true; _expiryScan.AutoSize = true;
         _dark.CheckedChanged += (_, _) => { Theme.IsDark = _dark.Checked; Theme.Apply(this); };
         bWrap.Controls.Add(Reg(_auto, "auto"), 0, 0);
-        bWrap.Controls.Add(Reg(_startup, "startup"), 0, 1);
-        bWrap.Controls.Add(Reg(_dark, "dark_mode"), 0, 2);
-        bWrap.Controls.Add(grid, 0, 3);
-        bWrap.Controls.Add(rev, 0, 4);
+        bWrap.Controls.Add(Reg(_expiryScan, "expiry_scan"), 0, 1);
+        bWrap.Controls.Add(Reg(_startup, "startup"), 0, 2);
+        bWrap.Controls.Add(Reg(_dark, "dark_mode"), 0, 3);
+        bWrap.Controls.Add(grid, 0, 4);
+        bWrap.Controls.Add(rev, 0, 5);
         gBehavior.Controls.Add(bWrap);
-        gBehavior.Height = 188;
+        gBehavior.Height = 214;
         root.Controls.Add(gBehavior);
 
         // sorting schemes (music / movies / invoices)
@@ -300,6 +302,7 @@ public sealed class SettingsForm : Form
         _auto.Checked = _watcher.Auto;
         _startup.Checked = Startup.IsEnabled;
         _dark.Checked = _cfg.DarkMode;
+        _expiryScan.Checked = _cfg.ExpiryScan;
         _poll.Value = Math.Clamp(_cfg.PollIntervalSeconds, (int)_poll.Minimum, (int)_poll.Maximum);
         _minAge.Value = Math.Clamp(_cfg.MinAgeSeconds, (int)_minAge.Minimum, (int)_minAge.Maximum);
         _review.Value = Math.Clamp(_cfg.ReviewThreshold, (int)_review.Minimum, (int)_review.Maximum);
@@ -382,6 +385,7 @@ public sealed class SettingsForm : Form
         _cfg.SeparateInvoiceParties = _sepParties.Checked;
         _cfg.Rules = _rulesList.Items.Cast<RuleEntry>().ToList();
         _cfg.AutoOrganize = _auto.Checked; // persist the auto-move state
+        _cfg.ExpiryScan = _expiryScan.Checked;
         _cfg.DarkMode = _dark.Checked; Theme.IsDark = _dark.Checked;
         if (_lang.SelectedIndex >= 0) _cfg.Language = L.Languages[_lang.SelectedIndex].Code;
         try { _cfg.Save(); }
@@ -735,12 +739,52 @@ public sealed class ExpiryForm : Form
                 if (it.Tag is string f) Reminders.Remove(f);
             Refresh4();
         };
+        var add = new Button
+        {
+            Text = L.S("exp_add"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Padding = new Padding(12, 4, 12, 4), Tag = "primary", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White, Margin = new Padding(8, 0, 0, 0),
+        };
+        add.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
+        bar.Controls.Add(add);
 
         Controls.Add(_list);
         Controls.Add(bar);
         Load += (_, _) => Refresh4();
         Theme.Apply(this);
+    }
+
+    // Manually scan a document the user picks (e.g. a passport already filed) and
+    // record its expiry — the same backend-independent scan the watcher uses.
+    private void AddDocument(Button btn)
+    {
+        using var dlg = new OpenFileDialog
+        { Filter = "Documents & images|*.pdf;*.jpg;*.jpeg;*.png;*.bmp;*.webp;*.heic;*.tif;*.tiff;*.txt;*.docx|All files|*.*" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var path = dlg.FileName;
+        btn.Enabled = false; btn.Text = "…";
+        Task.Run(() =>
+        {
+            var text = Extractor.Snippet(path, 4000);
+            return ExpiryScanner.Scan(Path.GetFileName(path), text);
+        }).ContinueWith(t =>
+        {
+            if (IsDisposed) return;
+            BeginInvoke(() =>
+            {
+                btn.Enabled = true; btn.Text = L.S("exp_add");
+                if (t.Result is ExpiryScanner.Result r)
+                {
+                    Reminders.Record(path, r.Kind, r.Date);
+                    Refresh4();
+                    MessageBox.Show(this, string.Format(L.S("exp_added"), r.Kind, r.Date), Text);
+                }
+                else MessageBox.Show(this, L.S("exp_none_found"), Text);
+            });
+        });
     }
 
     private void Refresh4()

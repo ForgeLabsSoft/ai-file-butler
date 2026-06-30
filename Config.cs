@@ -58,6 +58,9 @@ public sealed class Config
     public bool FirstRunDone { get; set; } = false;  // show the welcome screen once
     public bool DarkMode { get; set; } = false;      // dark theme for the windows
     public double FaceThreshold { get; set; } = 0.35; // face-match similarity (0..1)
+    // Auto-read expiry dates from documents (passport, visa, insurance…) and
+    // remind you before they lapse. Works even without the AI (regex over text).
+    public bool ExpiryScan { get; set; } = true;
 
     // User-defined rules: if a file's name or content contains Match, send it to
     // Folder (a path under the destination, e.g. "Invoices/Orange" or "University").

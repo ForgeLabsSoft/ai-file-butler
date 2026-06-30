@@ -17,6 +17,14 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
+                case "--expiry": // hidden QA: test the expiry scanner on a text/file
+                {
+                    var input = args.Length >= 2 ? string.Join(" ", args.Skip(1)) : "";
+                    var text = System.IO.File.Exists(input) ? Extractor.Snippet(input, 4000) : input;
+                    var res = ExpiryScanner.Scan(System.IO.Path.GetFileName(input), text);
+                    System.IO.File.WriteAllText("expiry-result.txt", res is null ? "none" : $"{res.Kind} | {res.Date}");
+                    return;
+                }
                 case "--downloadmodel": // hidden: fetch the face model into the cache
                     System.IO.File.WriteAllText("model-dl.txt", FaceRecognizer.DownloadModel() ? "ok" : "fail");
                     return;

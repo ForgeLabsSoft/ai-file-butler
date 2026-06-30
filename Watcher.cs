@@ -80,8 +80,7 @@ public sealed class Watcher
                     {
                         Organizer.Apply(plan);
                         _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
-                        if (!string.IsNullOrWhiteSpace(sug.Expiry))
-                            Reminders.Record(plan.Dst, sug.DocKind ?? "", sug.Expiry!);
+                        RecordExpiry(plan.Dst, file, snippet, sug);
                         _seenSizes.Remove(file.FullName);
                         SessionCount++;
                     }
@@ -97,6 +96,25 @@ public sealed class Watcher
             }
             return plans;
         }
+    }
+
+    /// <summary>Record an expiry reminder for a filed document. Uses the AI's
+    /// answer if it gave one, otherwise falls back to a backend-independent
+    /// regex scan of the document text — but only when expiry scanning is on.</summary>
+    private void RecordExpiry(string dst, FileInfo file, string snippet, Suggestion sug)
+    {
+        if (!_cfg.ExpiryScan) return;
+
+        var expiry = sug.Expiry;
+        var kind = sug.DocKind;
+        if (string.IsNullOrWhiteSpace(expiry))
+        {
+            var found = ExpiryScanner.Scan(file.Name, snippet);
+            if (found is null) return;
+            expiry = found.Date;
+            if (string.IsNullOrWhiteSpace(kind)) kind = found.Kind;
+        }
+        Reminders.Record(dst, kind ?? "", expiry!);
     }
 
     /// <summary>Notify about documents expiring within 30 days (once each per session).</summary>
@@ -149,8 +167,7 @@ public sealed class Watcher
                 var plan = Organizer.BuildPlan(file, sug, _cfg);
                 Organizer.Apply(plan);
                 _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
-                if (!string.IsNullOrWhiteSpace(sug.Expiry))
-                    Reminders.Record(plan.Dst, sug.DocKind ?? "", sug.Expiry!);
+                RecordExpiry(plan.Dst, file, snippet, sug);
                 SessionCount++;
                 plans.Add(plan);
             }
