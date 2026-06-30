@@ -17,24 +17,43 @@ public static class People
     public static float Threshold = 0.35f;
 
     private static readonly string Path_ = Paths.File("people.json");
+    private static readonly object _gate = new();
 
     private static List<Person>? _cache;
 
     private static List<Person> Load()
     {
-        if (_cache is not null) return _cache;
-        try
+        lock (_gate)
         {
-            if (File.Exists(Path_))
-                _cache = JsonSerializer.Deserialize<List<Person>>(File.ReadAllText(Path_)) ?? new();
-            else _cache = new();
+            if (_cache is not null) return _cache;
+            try
+            {
+                if (File.Exists(Path_))
+                    _cache = JsonSerializer.Deserialize<List<Person>>(File.ReadAllText(Path_)) ?? new();
+                else _cache = new();
+            }
+            catch { _cache = new(); }
+            return _cache;
         }
-        catch { _cache = new(); }
-        return _cache;
     }
 
-    private static void Save() =>
-        File.WriteAllText(Path_, JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = false }));
+    // Atomic + lock-guarded so enrolling from a background thread can't corrupt or
+    // wipe the (biometric) face data.
+    private static void Save()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = false });
+                var tmp = Path_ + ".tmp";
+                File.WriteAllText(tmp, json);
+                if (File.Exists(Path_)) File.Replace(tmp, Path_, Path_ + ".bak");
+                else File.Move(tmp, Path_);
+            }
+            catch { /* best effort */ }
+        }
+    }
 
     public static List<(string Name, int Count)> List() =>
         Load().Select(p => (p.Name, p.Embeddings.Count)).ToList();
@@ -43,18 +62,23 @@ public static class People
     {
         name = name.Trim();
         if (name.Length == 0) return;
-        var list = Load();
-        var p = list.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (p is null) { p = new Person { Name = name }; list.Add(p); }
-        p.Embeddings.Add(embedding);
-        Save();
+        lock (_gate)
+        {
+            var list = Load();
+            var p = list.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (p is null) { p = new Person { Name = name }; list.Add(p); }
+            p.Embeddings.Add(embedding);
+            Save();
+        }
     }
 
     public static void Remove(string name)
     {
-        var list = Load();
-        list.RemoveAll(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-        Save();
+        lock (_gate)
+        {
+            Load().RemoveAll(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            Save();
+        }
     }
 
     /// <summary>Best-matching enrolled person for a face, or null if none is close enough.</summary>

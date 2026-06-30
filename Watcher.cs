@@ -68,20 +68,29 @@ public sealed class Watcher
                 if (!Directory.Exists(dir)) continue;
                 foreach (var file in Eligible(dir))
                 {
-                    var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
-                    var decided = Decide(file, snippet, clf);
-                    if (decided is null) continue;
-                    var sug = decided.Value;
-                    if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
-                    var plan = Organizer.BuildPlan(file, sug, _cfg);
-                    plans.Add(plan);
-                    if (apply)
+                    // One bad file (locked, too-long path, vanished) must never abort
+                    // the whole batch — log it and move on.
+                    try
                     {
-                        Organizer.Apply(plan);
-                        _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
-                        RecordExpiry(plan.Dst, file, snippet, sug);
-                        _seenSizes.Remove(file.FullName);
-                        SessionCount++;
+                        var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
+                        var decided = Decide(file, snippet, clf);
+                        if (decided is null) continue;
+                        var sug = decided.Value;
+                        if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
+                        var plan = Organizer.BuildPlan(file, sug, _cfg);
+                        plans.Add(plan);
+                        if (apply)
+                        {
+                            Organizer.Apply(plan);
+                            _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
+                            RecordExpiry(plan.Dst, file, snippet, sug);
+                            _seenSizes.Remove(file.FullName);
+                            SessionCount++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}");
                     }
                 }
             }
@@ -168,17 +177,25 @@ public sealed class Watcher
                 if (!File.Exists(p)) continue;
                 var file = new FileInfo(p);
                 if (_cfg.IgnoreExts.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)) continue;
-                var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
-                var decided = Decide(file, snippet, clf);
-                if (decided is null) continue;
-                var sug = decided.Value;
-                if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
-                var plan = Organizer.BuildPlan(file, sug, _cfg);
-                Organizer.Apply(plan);
-                _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
-                RecordExpiry(plan.Dst, file, snippet, sug);
-                SessionCount++;
-                plans.Add(plan);
+                if (IsCloudOrLink(file)) continue;
+                try
+                {
+                    var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
+                    var decided = Decide(file, snippet, clf);
+                    if (decided is null) continue;
+                    var sug = decided.Value;
+                    if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
+                    var plan = Organizer.BuildPlan(file, sug, _cfg);
+                    Organizer.Apply(plan);
+                    _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
+                    RecordExpiry(plan.Dst, file, snippet, sug);
+                    SessionCount++;
+                    plans.Add(plan);
+                }
+                catch (Exception ex)
+                {
+                    Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}");
+                }
             }
             if (plans.Count > 0)
             {
@@ -197,6 +214,9 @@ public sealed class Watcher
         {
             var fi = new FileInfo(path);
             if (_cfg.IgnoreExts.Contains(fi.Extension, StringComparer.OrdinalIgnoreCase)) continue;
+            // Never touch cloud placeholders (OneDrive "online-only" would force a
+            // multi-GB download) or junctions/symlinks (reparse points).
+            if (IsCloudOrLink(fi)) continue;
 
             long size;
             try { size = fi.Length; } catch { continue; }
@@ -209,6 +229,20 @@ public sealed class Watcher
             // manual "Organize now" works on the first pass.
             if (!seenBefore || prevSize == size) yield return fi;
         }
+    }
+
+    // OneDrive online-only placeholders (FILE_ATTRIBUTE_OFFLINE / RecallOnDataAccess)
+    // and reparse points (junctions, symlinks) — moving these is unsafe.
+    private static bool IsCloudOrLink(FileInfo fi)
+    {
+        try
+        {
+            const FileAttributes Offline = FileAttributes.Offline;
+            const FileAttributes RecallOnAccess = (FileAttributes)0x400000; // FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            var a = fi.Attributes;
+            return (a & (Offline | RecallOnAccess | FileAttributes.ReparsePoint)) != 0;
+        }
+        catch { return false; }
     }
 
     public int UndoLast()

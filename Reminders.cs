@@ -115,11 +115,35 @@ public static class Reminders
         return i <= 0 ? "" : L.S(RepeatKeys[i]);
     }
 
-    /// <summary>The lead times to use for an item: its own override, or the global
-    /// default. Sorted soonest-expiry-first, positives only.</summary>
-    public static List<int> LeadFor(Item i, List<int> global) =>
-        (i.LeadDays.Count > 0 ? i.LeadDays : global)
-        .Where(x => x > 0).Distinct().OrderByDescending(x => x).ToList();
+    // Smart per-type lead times: a passport is worth renewing ~9 months out, an
+    // MOT only weeks out. Used when the user hasn't set a per-document override.
+    private static readonly Dictionary<string, int[]> TypeLeads = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Passport"] = new[] { 270, 90, 30 },
+        ["Visa"] = new[] { 120, 60, 30, 7 },
+        ["Residence permit"] = new[] { 120, 60, 30, 7 },
+        ["Right to work"] = new[] { 120, 60, 30, 7 },
+        ["Driving licence"] = new[] { 60, 30, 7 },
+        ["MOT"] = new[] { 30, 14, 3 },
+        ["Car tax"] = new[] { 30, 14, 3 },
+        ["TV licence"] = new[] { 30, 14 },
+        ["Council tax"] = new[] { 30, 14 },
+    };
+
+    private static IReadOnlyList<int>? TypeDefault(string kind)
+    {
+        if (TypeLeads.TryGetValue(kind ?? "", out var v)) return v;
+        if ((kind ?? "").Contains("insurance", StringComparison.OrdinalIgnoreCase)) return new[] { 30, 14, 3 };
+        return null;
+    }
+
+    /// <summary>The lead times for an item: its own override, else a smart per-type
+    /// profile, else the global default. Soonest-first, positives only.</summary>
+    public static List<int> LeadFor(Item i, List<int> global)
+    {
+        IEnumerable<int> src = i.LeadDays.Count > 0 ? i.LeadDays : (TypeDefault(i.Kind) ?? (IReadOnlyList<int>)global);
+        return src.Where(x => x > 0).Distinct().OrderByDescending(x => x).ToList();
+    }
 
     /// <summary>Mark lead thresholds as already notified for a document.</summary>
     public static void MarkNotified(string file, IEnumerable<int> thresholds)
