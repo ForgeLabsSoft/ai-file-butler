@@ -839,7 +839,9 @@ public sealed class ExpiryForm : Form
     {
         "task" => (new[] { L.S("exp_task"), L.S("exp_repeat"), L.S("exp_due"), L.S("exp_days") },
                    2, 3, new[] { 230, 120, 110, 80 }),
-        "id" or "renewal" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days") },
+        "id" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_idtype"), L.S("exp_date"), L.S("exp_days") },
+                   5, 6, new[] { 110, 110, 160, 120, 130, 100, 70 }),
+        "renewal" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days") },
                    5, 6, new[] { 110, 110, 160, 120, 130, 100, 70 }),
         _ => (new[] { L.S("exp_item"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days"), L.S("exp_repeat"), L.S("exp_id"), L.S("exp_country") },
                    2, 3, new[] { 175, 120, 90, 60, 80, 90, 105 }),
@@ -1015,6 +1017,24 @@ internal static class DialogUi
     public static string RepeatValue(ComboBox c) =>
         c.SelectedIndex >= 0 && c.SelectedIndex < Reminders.RepeatVals.Length ? Reminders.RepeatVals[c.SelectedIndex] : "";
 
+    // Common document / renewal types for the "ID type" picker. Editable, so a
+    // custom value can still be typed in.
+    public static readonly string[] CommonTypes =
+    {
+        "Passport", "ID card", "Driving licence", "Residence permit", "Visa", "Work permit",
+        "National Insurance", "Right to work", "Birth certificate",
+        "Car insurance", "Home insurance", "Pet insurance", "Travel insurance", "Life insurance", "Health insurance",
+        "Car tax", "MOT", "TV licence", "Council tax", "Mortgage", "Tenancy", "Warranty", "Subscription",
+    };
+
+    public static ComboBox KindCombo(string current)
+    {
+        var c = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown };
+        c.Items.AddRange(CommonTypes);
+        c.Text = current;
+        return c;
+    }
+
     /// <summary>A date field with a calendar drop-down. When optional, an unchecked
     /// box means "no date".</summary>
     public static DateTimePicker DatePicker(string iso, bool optional)
@@ -1057,7 +1077,7 @@ public sealed class ReminderEditForm : Form
     private readonly TextBox _id = new();
     private readonly TextBox _name = new();
     private readonly TextBox _country = new();
-    private readonly TextBox _kind = new();
+    private readonly ComboBox _kind;
     private readonly TextBox _leads = new();
     private readonly ComboBox _repeat;
     private readonly DateTimePicker _start;
@@ -1066,6 +1086,7 @@ public sealed class ReminderEditForm : Form
     public ReminderEditForm(Reminders.Item item)
     {
         _item = item;
+        _kind = DialogUi.KindCombo(item.Kind);
         _repeat = DialogUi.RepeatCombo(item.Repeat);
         _start = DialogUi.DatePicker(item.Start, optional: true);
         _expires = DialogUi.DatePicker(item.Date, optional: false);
@@ -1083,7 +1104,7 @@ public sealed class ReminderEditForm : Form
         DialogUi.Row(grid, 2, "exp_id", _id, L.S("exp_id_hint")); _id.Text = item.Id;
         DialogUi.Row(grid, 3, "exp_name", _name); _name.Text = item.Name;
         DialogUi.Row(grid, 4, "exp_country", _country); _country.Text = item.Country;
-        DialogUi.Row(grid, 5, "exp_kind", _kind); _kind.Text = item.Kind;
+        DialogUi.Row(grid, 5, "exp_idtype", _kind);
         DialogUi.Row(grid, 6, "exp_date", _expires);  // Expires
         DialogUi.Row(grid, 7, "exp_repeat", _repeat);
         DialogUi.Row(grid, 8, "exp_leads", _leads, L.S("exp_leads_hint")); _leads.Text = string.Join(", ", item.LeadDays);
