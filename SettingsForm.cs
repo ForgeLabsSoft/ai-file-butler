@@ -590,9 +590,8 @@ public sealed class HistoryForm : Form
         BackColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
 
-        _list.View = View.Details;
-        _list.FullRowSelect = true;
         _list.Dock = DockStyle.Fill;
+        Theme.ModernList(_list);
         _list.Columns.Add(L.S("hist_file"), 240);
         _list.Columns.Add(L.S("hist_dest"), 340);
         _list.Columns.Add(L.S("hist_when"), 140);
@@ -665,7 +664,8 @@ public sealed class MemoriesForm : Form
         };
         var sub = new Label { Text = L.S("mem_onthisday"), Dock = DockStyle.Top, Height = 26, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Padding = new Padding(14, 4, 14, 0) };
 
-        _list.View = View.Details; _list.FullRowSelect = true; _list.Dock = DockStyle.Fill;
+        _list.Dock = DockStyle.Fill;
+        Theme.ModernList(_list);
         _list.Columns.Add(L.S("hist_file"), 300);
         _list.Columns.Add(L.S("hist_when"), 120);
         _list.Columns.Add("", 150);
@@ -708,9 +708,8 @@ public sealed class ExpiryForm : Form
         BackColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
 
-        _list.View = View.Details;
-        _list.FullRowSelect = true;
         _list.Dock = DockStyle.Fill;
+        Theme.ModernList(_list);
         _list.Columns.Add(L.S("exp_doc"), 280);
         _list.Columns.Add(L.S("exp_kind"), 150);
         _list.Columns.Add(L.S("exp_date"), 110);

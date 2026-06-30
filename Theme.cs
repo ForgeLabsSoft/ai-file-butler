@@ -77,4 +77,93 @@ internal static class Theme
         }
         foreach (Control ch in c.Controls) Style(ch);
     }
+
+    /// <summary>Make a details ListView look modern: taller rows, a flat
+    /// borderless header, accent row selection — instead of the boxy Win32 grid.</summary>
+    public static void ModernList(ListView lv)
+    {
+        lv.View = View.Details;
+        lv.FullRowSelect = true;
+        lv.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        lv.BorderStyle = BorderStyle.None;
+        lv.Font = new Font("Segoe UI", 9.75f);
+        lv.OwnerDraw = true;
+        lv.SmallImageList = new ImageList { ImageSize = new Size(1, 30) }; // forces ~30px rows
+
+        Color headBg = IsDark ? Color.FromArgb(46, 47, 57) : Color.FromArgb(245, 246, 248);
+        Color headFg = IsDark ? Color.FromArgb(168, 170, 182) : Color.FromArgb(92, 94, 102);
+        Color rowBg = IsDark ? DInput : Color.White;
+        Color line = IsDark ? Color.FromArgb(58, 60, 72) : Color.FromArgb(235, 236, 240);
+        var headFont = new Font(lv.Font, FontStyle.Bold);
+        const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis;
+
+        lv.DrawColumnHeader += (_, e) =>
+        {
+            using var b = new SolidBrush(headBg);
+            e.Graphics.FillRectangle(b, e.Bounds);
+            using var p = new Pen(line);
+            e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+            var r = e.Bounds; r.X += 10; r.Width -= 12;
+            TextRenderer.DrawText(e.Graphics, e.Header?.Text ?? "", headFont, r, headFg, flags);
+        };
+        lv.DrawItem += (_, _) => { }; // required so subitems own-draw in Details view
+        lv.DrawSubItem += (_, e) =>
+        {
+            bool sel = e.Item!.Selected;
+            using (var b = new SolidBrush(sel ? Accent : rowBg)) e.Graphics.FillRectangle(b, e.Bounds);
+            if (!sel)
+            {
+                using var p = new Pen(line);
+                e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+            }
+            var fg = sel ? Color.White : e.Item.ForeColor;
+            var r = e.Bounds; r.X += 10; r.Width -= 12;
+            TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? "", lv.Font, r, fg, flags);
+        };
+    }
+
+    /// <summary>Give a tray/context menu a flat, modern look (no 3-D borders,
+    /// accent hover, comfortable spacing) instead of the dated Win32 default.</summary>
+    public static void StyleMenu(ToolStrip menu)
+    {
+        menu.Renderer = new ModernMenuRenderer();
+        menu.Font = new Font("Segoe UI", 9.75f);
+        menu.ImageScalingSize = new Size(18, 18);
+        menu.Padding = new Padding(6);
+    }
+
+    private sealed class ModernColors : ProfessionalColorTable
+    {
+        private static Color Bg => IsDark ? Color.FromArgb(38, 39, 48) : Color.White;
+        public override Color ToolStripDropDownBackground => Bg;
+        public override Color ImageMarginGradientBegin => Bg;
+        public override Color ImageMarginGradientMiddle => Bg;
+        public override Color ImageMarginGradientEnd => Bg;
+        public override Color MenuItemSelected => Accent;
+        public override Color MenuItemSelectedGradientBegin => Accent;
+        public override Color MenuItemSelectedGradientEnd => Accent;
+        public override Color MenuItemPressedGradientBegin => Accent;
+        public override Color MenuItemPressedGradientEnd => Accent;
+        public override Color MenuItemBorder => Color.Transparent;
+        public override Color MenuBorder => IsDark ? Color.FromArgb(64, 66, 78) : Color.FromArgb(224, 224, 228);
+        public override Color SeparatorDark => IsDark ? Color.FromArgb(64, 66, 78) : Color.FromArgb(232, 232, 236);
+        public override Color SeparatorLight => Bg;
+    }
+
+    private sealed class ModernMenuRenderer : ToolStripProfessionalRenderer
+    {
+        public ModernMenuRenderer() : base(new ModernColors()) { RoundedEdges = false; }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            // White text on the accent highlight; otherwise follow the theme.
+            if (e.Item.Selected && e.Item.Enabled)
+                e.TextColor = Color.White;
+            else if (!e.Item.Enabled)
+                e.TextColor = IsDark ? Color.FromArgb(140, 142, 152) : Color.Gray;
+            else
+                e.TextColor = IsDark ? DText : Color.FromArgb(28, 28, 32);
+            base.OnRenderItemText(e);
+        }
+    }
 }

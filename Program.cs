@@ -145,15 +145,17 @@ internal sealed class ButlerContext : ApplicationContext
             _organizeItem,
             _undoItem,
             _openItem,
-            _historyItem,
+            new ToolStripSeparator(),
             _peopleItem,
             _remindersItem,
             _memoriesItem,
-            _helpItem,
+            _historyItem,
             new ToolStripSeparator(),
+            _helpItem,
             _startupItem,
             _quitItem,
         });
+        Theme.StyleMenu(menu);
         menu.Opening += (_, _) => RefreshMenu();
 
         _tray = new NotifyIcon
@@ -224,20 +226,21 @@ internal sealed class ButlerContext : ApplicationContext
         var more = _cfg.WatchDirs.Count > 1 ? $" +{_cfg.WatchDirs.Count - 1}" : "";
         _watchItem.Text = $"{first}{more}";
 
-        // labels follow the language chosen in Settings
-        _settingsItem.Text = L.S("m_settings");
-        _autoItem.Text = L.S("m_auto");
-        _pauseItem.Text = L.S("m_pause");
-        _organizeItem.Text = L.S("m_organize");
-        _undoItem.Text = L.S("m_undo");
-        _openItem.Text = L.S("m_open");
-        _historyItem.Text = L.S("m_history");
-        _peopleItem.Text = L.S("m_people");
-        _remindersItem.Text = L.S("m_reminders");
-        _memoriesItem.Text = L.S("m_memories");
-        _helpItem.Text = L.S("m_help");
-        _startupItem.Text = L.S("startup");
-        _quitItem.Text = L.S("m_quit");
+        // labels follow the language chosen in Settings; an emoji prefix makes
+        // each row scannable at a glance (⏰ Reminders stands out, etc.)
+        _settingsItem.Text = "⚙  " + L.S("m_settings");
+        _autoItem.Text = "🔄  " + L.S("m_auto");
+        _pauseItem.Text = "⏸  " + L.S("m_pause");
+        _organizeItem.Text = "✨  " + L.S("m_organize");
+        _undoItem.Text = "↩  " + L.S("m_undo");
+        _openItem.Text = "📂  " + L.S("m_open");
+        _historyItem.Text = "🕘  " + L.S("m_history");
+        _peopleItem.Text = "🧑  " + L.S("m_people");
+        _remindersItem.Text = "⏰  " + L.S("m_reminders");
+        _memoriesItem.Text = "📅  " + L.S("m_memories");
+        _helpItem.Text = "❔  " + L.S("m_help");
+        _startupItem.Text = "🚀  " + L.S("startup");
+        _quitItem.Text = "✖  " + L.S("m_quit");
 
         _autoItem.Checked = _watcher.Auto;
         _pauseItem.Checked = _watcher.Paused;
