@@ -36,6 +36,13 @@ public static class PhotoMeta
         return name is null ? "People/Unknown" : "People/" + name;
     }
 
+    /// <summary>Capture date from EXIF, falling back to the file's date.</summary>
+    public static DateTime CaptureDate(string path)
+    {
+        var fi = new FileInfo(path);
+        return ExifDate(fi) ?? fi.LastWriteTime;
+    }
+
     private static DateTime? ExifDate(FileInfo file)
     {
         try

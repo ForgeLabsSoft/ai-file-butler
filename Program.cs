@@ -55,6 +55,8 @@ internal static class Program
                     Form sf = args.Length > 3 && args[3] == "welcome" ? new WelcomeForm()
                         : args.Length > 3 && args[3] == "history" ? new HistoryForm()
                         : args.Length > 3 && args[3] == "people" ? new PeopleForm()
+                        : args.Length > 3 && args[3] == "memories" ? new MemoriesForm(scfg.DestRoot)
+                        : args.Length > 3 && args[3] == "reminders" ? new ExpiryForm()
                         : new SettingsForm(scfg, new Watcher(scfg));
                     sf.Show();
                     Application.DoEvents();
@@ -93,6 +95,8 @@ internal sealed class ButlerContext : ApplicationContext
     private readonly ToolStripMenuItem _openItem;
     private readonly ToolStripMenuItem _historyItem;
     private readonly ToolStripMenuItem _peopleItem;
+    private readonly ToolStripMenuItem _remindersItem;
+    private readonly ToolStripMenuItem _memoriesItem;
     private readonly ToolStripMenuItem _helpItem;
     private readonly ToolStripMenuItem _quitItem;
     private SettingsForm? _settings;
@@ -122,6 +126,8 @@ internal sealed class ButlerContext : ApplicationContext
         _openItem = new ToolStripMenuItem("", null, (_, _) => OpenSorted());
         _historyItem = new ToolStripMenuItem("", null, (_, _) => new HistoryForm().Show());
         _peopleItem = new ToolStripMenuItem("", null, (_, _) => new PeopleForm().Show());
+        _remindersItem = new ToolStripMenuItem("", null, (_, _) => new ExpiryForm().Show());
+        _memoriesItem = new ToolStripMenuItem("", null, (_, _) => new MemoriesForm(_cfg.DestRoot).Show());
         _helpItem = new ToolStripMenuItem("", null, (_, _) => new HelpForm().ShowDialog());
         _quitItem = new ToolStripMenuItem("", null, (_, _) => Quit());
 
@@ -141,6 +147,8 @@ internal sealed class ButlerContext : ApplicationContext
             _openItem,
             _historyItem,
             _peopleItem,
+            _remindersItem,
+            _memoriesItem,
             _helpItem,
             new ToolStripSeparator(),
             _startupItem,
@@ -169,7 +177,13 @@ internal sealed class ButlerContext : ApplicationContext
         }
         else
         {
-            _tray.ShowBalloonTip(4000, "AI File Butler", L.S("n_running"), ToolTipIcon.Info);
+            // A warm "on this day" greeting if there are memories, else a quiet hello.
+            var mems = Memories.OnThisDay(_cfg.DestRoot);
+            if (mems.Count > 0)
+                _tray.ShowBalloonTip(6000, "AI File Butler",
+                    string.Format(L.S("n_onthisday"), mems[0].YearsAgo, mems.Count), ToolTipIcon.Info);
+            else
+                _tray.ShowBalloonTip(4000, "AI File Butler", L.S("n_running"), ToolTipIcon.Info);
         }
     }
 
@@ -219,6 +233,8 @@ internal sealed class ButlerContext : ApplicationContext
         _openItem.Text = L.S("m_open");
         _historyItem.Text = L.S("m_history");
         _peopleItem.Text = L.S("m_people");
+        _remindersItem.Text = L.S("m_reminders");
+        _memoriesItem.Text = L.S("m_memories");
         _helpItem.Text = L.S("m_help");
         _startupItem.Text = L.S("startup");
         _quitItem.Text = L.S("m_quit");

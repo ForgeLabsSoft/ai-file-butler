@@ -20,6 +20,7 @@ public sealed class Watcher
     private readonly Learner _learner = new();
     // path -> size for write-stability detection
     private readonly Dictionary<string, long> _seenSizes = new();
+    private readonly HashSet<string> _expiryNotified = new();
 
     public Watcher(Config cfg) => _cfg = cfg;
 
@@ -61,6 +62,8 @@ public sealed class Watcher
             foreach (var (token, cat) in _learner.DetectCorrections(_cfg.DestRoot))
                 Notify?.Invoke(EventKind.Info, string.Format(L.S("n_learned"), token, cat));
 
+            CheckExpiries();
+
             foreach (var dir in _cfg.WatchDirs)
             {
                 if (!Directory.Exists(dir)) continue;
@@ -77,6 +80,8 @@ public sealed class Watcher
                     {
                         Organizer.Apply(plan);
                         _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
+                        if (!string.IsNullOrWhiteSpace(sug.Expiry))
+                            Reminders.Record(plan.Dst, sug.DocKind ?? "", sug.Expiry!);
                         _seenSizes.Remove(file.FullName);
                         SessionCount++;
                     }
@@ -91,6 +96,19 @@ public sealed class Watcher
                 Notify?.Invoke(EventKind.Organized, string.Format(L.S("n_organized"), plans.Count, names + extra));
             }
             return plans;
+        }
+    }
+
+    /// <summary>Notify about documents expiring within 30 days (once each per session).</summary>
+    public void CheckExpiries()
+    {
+        foreach (var i in Reminders.Upcoming(30))
+        {
+            if (!_expiryNotified.Add(i.Date + "|" + i.File)) continue;
+            int d = Reminders.DaysLeft(i);
+            var msg = d < 0 ? string.Format(L.S("n_expired"), i.Kind)
+                            : string.Format(L.S("n_expiring"), i.Kind, d);
+            Notify?.Invoke(EventKind.Info, msg);
         }
     }
 
@@ -131,6 +149,8 @@ public sealed class Watcher
                 var plan = Organizer.BuildPlan(file, sug, _cfg);
                 Organizer.Apply(plan);
                 _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
+                if (!string.IsNullOrWhiteSpace(sug.Expiry))
+                    Reminders.Record(plan.Dst, sug.DocKind ?? "", sug.Expiry!);
                 SessionCount++;
                 plans.Add(plan);
             }

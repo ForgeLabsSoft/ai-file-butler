@@ -639,6 +639,116 @@ public sealed class HistoryForm : Form
     private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "…" + p[^30..];
 }
 
+/// <summary>Echo-inspired: "on this day" photos from past years + a library summary.</summary>
+public sealed class MemoriesForm : Form
+{
+    private readonly string _dest;
+    private readonly ListView _list = new();
+
+    public MemoriesForm(string destRoot)
+    {
+        _dest = destRoot;
+        Text = L.S("mem_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterScreen;
+        Size = new Size(680, 500);
+        MinimumSize = new Size(480, 340);
+        BackColor = Color.White;
+        Font = new Font("Segoe UI", 9.5f);
+
+        var (p, d, pe) = Memories.Summary(destRoot);
+        var summary = new Label
+        {
+            Text = string.Format(L.S("mem_summary"), p, d, pe), Dock = DockStyle.Top, Height = 38,
+            ForeColor = Color.FromArgb(43, 139, 234), Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+            Padding = new Padding(14, 9, 14, 0),
+        };
+        var sub = new Label { Text = L.S("mem_onthisday"), Dock = DockStyle.Top, Height = 26, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Padding = new Padding(14, 4, 14, 0) };
+
+        _list.View = View.Details; _list.FullRowSelect = true; _list.Dock = DockStyle.Fill;
+        _list.Columns.Add(L.S("hist_file"), 300);
+        _list.Columns.Add(L.S("hist_when"), 120);
+        _list.Columns.Add("", 150);
+        _list.DoubleClick += (_, _) =>
+        {
+            if (_list.SelectedItems.Count > 0 && _list.SelectedItems[0].Tag is string f && File.Exists(f))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = f, UseShellExecute = true }); } catch { }
+        };
+
+        Controls.Add(_list);
+        Controls.Add(sub);
+        Controls.Add(summary);
+        Load += (_, _) => Refresh5();
+        Theme.Apply(this);
+    }
+
+    private void Refresh5()
+    {
+        _list.Items.Clear();
+        var mems = Memories.OnThisDay(_dest);
+        foreach (var m in mems)
+            _list.Items.Add(new ListViewItem(new[] { Path.GetFileName(m.File), m.Date.ToString("yyyy-MM-dd"), string.Format(L.S("mem_years"), m.YearsAgo) }) { Tag = m.File });
+        if (mems.Count == 0)
+            _list.Items.Add(new ListViewItem(new[] { L.S("mem_empty"), "", "" }));
+    }
+}
+
+/// <summary>Lists official documents with an expiry date and how long is left.</summary>
+public sealed class ExpiryForm : Form
+{
+    private readonly ListView _list = new();
+
+    public ExpiryForm()
+    {
+        Text = L.S("exp_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterScreen;
+        Size = new Size(720, 480);
+        MinimumSize = new Size(520, 320);
+        BackColor = Color.White;
+        Font = new Font("Segoe UI", 9.5f);
+
+        _list.View = View.Details;
+        _list.FullRowSelect = true;
+        _list.Dock = DockStyle.Fill;
+        _list.Columns.Add(L.S("exp_doc"), 280);
+        _list.Columns.Add(L.S("exp_kind"), 150);
+        _list.Columns.Add(L.S("exp_date"), 110);
+        _list.Columns.Add(L.S("exp_days"), 100);
+
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 48, Padding = new Padding(10, 7, 10, 7) };
+        var remove = new Button { Text = L.S("remove"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(12, 4, 12, 4) };
+        remove.FlatAppearance.BorderColor = Color.LightGray;
+        remove.Click += (_, _) =>
+        {
+            foreach (ListViewItem it in _list.SelectedItems)
+                if (it.Tag is string f) Reminders.Remove(f);
+            Refresh4();
+        };
+        bar.Controls.Add(remove);
+
+        Controls.Add(_list);
+        Controls.Add(bar);
+        Load += (_, _) => Refresh4();
+        Theme.Apply(this);
+    }
+
+    private void Refresh4()
+    {
+        _list.Items.Clear();
+        var all = Reminders.All();
+        foreach (var i in all)
+        {
+            int d = Reminders.DaysLeft(i);
+            var item = new ListViewItem(new[] { Path.GetFileName(i.File), i.Kind, i.Date, d < 0 ? "—" : d.ToString() }) { Tag = i.File };
+            if (d < 14) item.ForeColor = Color.OrangeRed;
+            else if (d < 30) item.ForeColor = Color.DarkOrange;
+            _list.Items.Add(item);
+        }
+        if (all.Count == 0) _list.Items.Add(new ListViewItem(new[] { L.S("exp_empty"), "", "", "" }));
+    }
+}
+
 /// <summary>A simple localized Help window explaining how the program works.</summary>
 public sealed class HelpForm : Form
 {

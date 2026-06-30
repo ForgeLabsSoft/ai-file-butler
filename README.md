@@ -34,6 +34,8 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 | 🎬 **Rich media sorting** | Movies by **genre/lead actor/year**, music by **artist/genre/year** (ID3 tags), invoices split into **Clients / Distributors** |
 | 📸 **Photo sorting** | Photos by **date taken**, **GPS location** (offline nearest-city), or **people** — all on-device, no cloud |
 | 🧑 **Face recognition** | Enroll people by example (tray → People) and photos sort into `People/<Name>`. Uses a small on-device model, downloaded once on demand (~13 MB) |
+| ⏰ **Expiry reminders** | Reads expiry dates from your documents (passport, visa, right-to-work, insurances, car tax…) and reminds you before they lapse |
+| 📅 **Memories** | "On this day" — resurfaces photos you took on today's date in past years |
 | 🎓 **Learns from you** | Move a file once; similar files follow next time |
 | 🔒 **100% offline** | No cloud, no account, no telemetry |
 | 🛡️ **Safe by default** | First run starts in **manual mode** — nothing moves until you opt in |

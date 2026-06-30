@@ -17,6 +17,10 @@ public readonly record struct Suggestion(
     // Set by a user rule: an explicit destination sub-path that overrides the
     // category/scheme folder entirely.
     public string? FolderOverride { get; init; }
+    // For official documents: when it expires (yyyy-MM-dd) and what kind it is
+    // (Passport, ID card, Visa, Insurance, Car tax…), for expiry reminders.
+    public string? Expiry { get; init; }
+    public string? DocKind { get; init; }
 }
 
 public interface IClassifier
@@ -81,10 +85,16 @@ public sealed class OllamaClassifier : IClassifier
         "- person: for a recognized movie, the lead actor; for a song, the artist — from your own knowledge. " +
         "E.g. Inception → Leonardo DiCaprio.\n" +
         "- party: for an invoice/receipt, \"distributor\" if it is FROM a supplier/vendor/store, " +
-        "\"client\" if it is a document issued TO a customer/client; otherwise \"\".\n\n" +
+        "\"client\" if it is a document issued TO a customer/client; otherwise \"\".\n" +
+        "- expiry: if this is an official document with an expiry/valid-until/renewal date " +
+        "(passport, ID card, driving licence, visa, residence permit, right to work, insurance, " +
+        "car tax/MOT, warranty, subscription), the expiry date as yyyy-MM-dd; otherwise \"\". " +
+        "Read it from the content; do not guess.\n" +
+        "- doc_kind: a short label for that document type (e.g. Passport, ID card, Visa, " +
+        "Car insurance, Home insurance, Pet insurance, Car tax, Driving licence), else \"\".\n\n" +
         "Respond with ONLY a JSON object: " +
         "{{\"category\":\"<key>\",\"filename\":\"<name.ext>\",\"confidence\":<0..1>,\"reason\":\"<short>\"," +
-        "\"year\":\"\",\"genre\":\"\",\"person\":\"\",\"party\":\"\"}}\n\n" +
+        "\"year\":\"\",\"genre\":\"\",\"person\":\"\",\"party\":\"\",\"expiry\":\"\",\"doc_kind\":\"\"}}\n\n" +
         "FILE NAME: {1}\nCONTENT SNIPPET:\n{2}\n";
 
     public Suggestion Classify(FileInfo file, string snippet)
@@ -131,6 +141,8 @@ public sealed class OllamaClassifier : IClassifier
             Genre = Clean(GetStr(root, "genre", "")),
             Person = Clean(GetStr(root, "person", "")),
             Party = GetStr(root, "party", "").Trim().ToLowerInvariant(),
+            Expiry = GetStr(root, "expiry", "").Trim(),
+            DocKind = GetStr(root, "doc_kind", "").Trim(),
         };
     }
 
