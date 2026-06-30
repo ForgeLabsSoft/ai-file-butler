@@ -280,9 +280,7 @@ public sealed class MainWindow : Form
         // ---- quick actions ----
         AddRow(Section(L.S("dash_quick"), 16), DockStyle.Left, 16);
         var actions = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
-        actions.Controls.Add(ActionButton("✨  " + L.S("m_organize"), true, () =>
-            Task.Run(() => _watcher.ScanNow(apply: true)).ContinueWith(_ =>
-            { if (!IsDisposed) BeginInvoke(RefreshDashboard); })));
+        actions.Controls.Add(ActionButton("✨  " + L.S("m_organize"), true, OrganizePreview));
         actions.Controls.Add(ActionButton("📂  " + L.S("m_open"), false, OpenSorted));
         actions.Controls.Add(ActionButton((_watcher.Paused ? "▶  " + L.S("dash_resume") : "⏸  " + L.S("m_pause")), false,
             () => { _watcher.Paused = !_watcher.Paused; SettingsChanged?.Invoke(); RefreshDashboard(); }));
@@ -328,6 +326,26 @@ public sealed class MainWindow : Form
     private void RefreshDashboard()
     {
         if (_current == "dashboard") Navigate("dashboard");
+    }
+
+    // Plan off-thread (the AI is slow), then let the user review the moves before
+    // anything is touched, then apply only what they kept.
+    private void OrganizePreview()
+    {
+        Task.Run(() => { try { return _watcher.PreviewMoves(); } catch { return new List<Watcher.Pending>(); } })
+            .ContinueWith(t =>
+            {
+                if (IsDisposed) return;
+                BeginInvoke(() =>
+                {
+                    var moves = t.Result;
+                    if (moves.Count == 0) { MessageBox.Show(this, L.S("n_nothing"), "AI File Butler"); return; }
+                    using var dlg = new PreviewForm(moves);
+                    if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Accepted.Count > 0)
+                        Task.Run(() => _watcher.ApplyMoves(dlg.Accepted))
+                            .ContinueWith(_ => { if (!IsDisposed) BeginInvoke(RefreshDashboard); });
+                });
+            });
     }
 
     private Control StatCard(Color bg, Color sub, string number, string label)

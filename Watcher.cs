@@ -49,60 +49,91 @@ public sealed class Watcher
         }
     }
 
+    /// <summary>A planned move plus the data needed to apply it later (so a preview
+    /// can be shown and only the accepted moves applied).</summary>
+    public sealed record Pending(Plan Plan, string Snippet, Suggestion Sug, FileInfo File);
+
     public List<Plan> ScanNow(bool apply)
     {
         lock (_lock)
         {
-            var clf = ClassifierFactory.Get(_cfg);
-            Backend = clf.Backend;
-            var plans = new List<Plan>();
-
             // Notice files the user moved between categories and learn from it.
             foreach (var (token, cat) in _learner.DetectCorrections(_cfg.DestRoot))
                 Notify?.Invoke(EventKind.Info, string.Format(L.S("n_learned"), token, cat));
 
             CheckExpiries();
 
-            foreach (var dir in _cfg.WatchDirs)
+            var moves = BuildMoves();
+            if (apply) ApplyMoves(moves);
+            return moves.Select(m => m.Plan).ToList();
+        }
+    }
+
+    /// <summary>Plan the moves without applying them — for a preview the user confirms.</summary>
+    public List<Pending> PreviewMoves()
+    {
+        lock (_lock) return BuildMoves();
+    }
+
+    private List<Pending> BuildMoves()
+    {
+        var clf = ClassifierFactory.Get(_cfg);
+        Backend = clf.Backend;
+        var moves = new List<Pending>();
+        foreach (var dir in _cfg.WatchDirs)
+        {
+            if (!Directory.Exists(dir)) continue;
+            foreach (var file in Eligible(dir))
             {
-                if (!Directory.Exists(dir)) continue;
-                foreach (var file in Eligible(dir))
+                // One bad file (locked, too-long path, vanished) must never abort
+                // the whole batch — log it and move on.
+                try
                 {
-                    // One bad file (locked, too-long path, vanished) must never abort
-                    // the whole batch — log it and move on.
-                    try
-                    {
-                        var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
-                        var decided = Decide(file, snippet, clf);
-                        if (decided is null) continue;
-                        var sug = decided.Value;
-                        if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
-                        var plan = Organizer.BuildPlan(file, sug, _cfg);
-                        plans.Add(plan);
-                        if (apply)
-                        {
-                            Organizer.Apply(plan);
-                            _learner.RecordPlacement(plan.Dst, file.Name, plan.Category);
-                            RecordExpiry(plan.Dst, file, snippet, sug);
-                            _seenSizes.Remove(file.FullName);
-                            SessionCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}");
-                    }
+                    var snippet = Extractor.Snippet(file.FullName, _cfg.MaxContentChars);
+                    var decided = Decide(file, snippet, clf);
+                    if (decided is null) continue;
+                    var sug = decided.Value;
+                    if (sug.Category == "music") sug = MediaMeta.EnrichMusic(file, sug);
+                    moves.Add(new Pending(Organizer.BuildPlan(file, sug, _cfg), snippet, sug, file));
+                }
+                catch (Exception ex)
+                {
+                    Notify?.Invoke(EventKind.Error, $"{file.Name}: {ex.Message}");
                 }
             }
+        }
+        return moves;
+    }
 
-            if (apply && plans.Count > 0)
+    /// <summary>Apply a (possibly user-filtered) set of planned moves.</summary>
+    public void ApplyMoves(IEnumerable<Pending> moves)
+    {
+        lock (_lock)
+        {
+            var applied = new List<Plan>();
+            foreach (var m in moves)
             {
-                LastBatchSize = plans.Count;
-                var names = string.Join(", ", plans.Take(3).Select(p => p.DstName));
-                var extra = plans.Count > 3 ? $" +{plans.Count - 3} more" : "";
-                Notify?.Invoke(EventKind.Organized, string.Format(L.S("n_organized"), plans.Count, names + extra));
+                try
+                {
+                    Organizer.Apply(m.Plan);
+                    _learner.RecordPlacement(m.Plan.Dst, m.File.Name, m.Plan.Category);
+                    RecordExpiry(m.Plan.Dst, m.File, m.Snippet, m.Sug);
+                    _seenSizes.Remove(m.File.FullName);
+                    SessionCount++;
+                    applied.Add(m.Plan);
+                }
+                catch (Exception ex)
+                {
+                    Notify?.Invoke(EventKind.Error, $"{m.File.Name}: {ex.Message}");
+                }
             }
-            return plans;
+            if (applied.Count > 0)
+            {
+                LastBatchSize = applied.Count;
+                var names = string.Join(", ", applied.Take(3).Select(p => p.DstName));
+                var extra = applied.Count > 3 ? $" +{applied.Count - 3} more" : "";
+                Notify?.Invoke(EventKind.Organized, string.Format(L.S("n_organized"), applied.Count, names + extra));
+            }
         }
     }
 

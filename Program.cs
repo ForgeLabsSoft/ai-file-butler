@@ -263,9 +263,16 @@ internal sealed class ButlerContext : ApplicationContext
 
     private void OrganizeNow()
     {
-        var plans = _watcher.ScanNow(apply: true);
-        if (plans.Count == 0)
-            _tray.ShowBalloonTip(3000, "AI File Butler", L.S("n_nothing"), ToolTipIcon.Info);
+        // plan off-thread, then let the user preview, then apply only what they keep
+        Task.Run(() => { try { return _watcher.PreviewMoves(); } catch { return new List<Watcher.Pending>(); } })
+            .ContinueWith(t => _ui.Post(_ =>
+            {
+                var moves = t.Result;
+                if (moves.Count == 0) { _tray.ShowBalloonTip(3000, "AI File Butler", L.S("n_nothing"), ToolTipIcon.Info); return; }
+                using var dlg = new PreviewForm(moves);
+                if (dlg.ShowDialog() == DialogResult.OK && dlg.Accepted.Count > 0)
+                    Task.Run(() => _watcher.ApplyMoves(dlg.Accepted));
+            }, null));
     }
 
     private void OpenSorted()
