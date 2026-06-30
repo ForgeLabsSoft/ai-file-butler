@@ -1040,13 +1040,14 @@ internal static class DialogUi
         return c;
     }
 
-    /// <summary>A date field with a calendar drop-down. When optional, an unchecked
-    /// box means "no date".</summary>
+    /// <summary>A date field with a calendar drop-down. When optional it keeps a
+    /// tick-box (ticked by default, so the calendar is usable straight away —
+    /// untick to mean "no date").</summary>
     public static DateTimePicker DatePicker(string iso, bool optional)
     {
         var dp = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", ShowCheckBox = optional };
-        if (Reminders.TryDate(iso, out var d)) { dp.Value = d; if (optional) dp.Checked = true; }
-        else if (optional) dp.Checked = false;
+        if (Reminders.TryDate(iso, out var d)) dp.Value = d;
+        dp.Checked = true; // enabled by default so the picker isn't greyed out
         return dp;
     }
 
