@@ -122,6 +122,7 @@ public sealed class Watcher
     /// (global default or a per-document override). Each threshold fires once.</summary>
     public void CheckExpiries()
     {
+        Reminders.RollRecurring(); // advance any past-due weekly/monthly/yearly tasks
         foreach (var i in Reminders.All())
         {
             int d = Reminders.DaysLeft(i);
@@ -130,8 +131,10 @@ public sealed class Watcher
             if (crossed.Count == 0) continue;
 
             Reminders.MarkNotified(i.File, crossed);
-            var msg = d < 0 ? string.Format(L.S("n_expired"), i.Kind)
-                            : string.Format(L.S("n_expiring"), i.Kind, d);
+            string msg = i.Category == "task"
+                ? string.Format(L.S(d <= 0 ? "n_task_today" : "n_task_due"), i.Label, d)
+                : (d < 0 ? string.Format(L.S("n_expired"), i.Kind)
+                         : string.Format(L.S("n_expiring"), i.Kind, d));
             Notify?.Invoke(EventKind.Info, msg);
         }
     }

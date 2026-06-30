@@ -751,65 +751,105 @@ public sealed class MemoriesForm : Form
     }
 }
 
-/// <summary>Lists official documents with an expiry date and how long is left.</summary>
+/// <summary>Reminders in three buckets: identity documents, renewals (insurance,
+/// tax, subscriptions…) and personal tasks. Documents/renewals are scanned;
+/// tasks are added by hand and can repeat.</summary>
 public sealed class ExpiryForm : Form
 {
     private readonly ListView _list = new();
-    private int _sortCol = 4;     // default: sort by Expires
+    private int _sortCol = 2;     // default: sort by Expires/Due
     private bool _sortAsc = true;
+    private string _filter = "all";
+    private readonly Dictionary<string, Button> _tabs = new();
+    private static readonly Color Accent = Color.FromArgb(43, 139, 234);
 
     public ExpiryForm()
     {
         Text = L.S("exp_title");
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(940, 520);
-        MinimumSize = new Size(640, 340);
+        Size = new Size(960, 560);
+        MinimumSize = new Size(680, 380);
         BackColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
+
+        // category tabs
+        var tabBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(12, 9, 12, 6), WrapContents = false };
+        foreach (var (key, lk) in new[] { ("all", "exp_all"), ("id", "exp_cat_id"), ("renewal", "exp_cat_renewal"), ("task", "exp_cat_task") })
+        {
+            var b = new Button { Text = L.S(lk), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(14, 5, 14, 5), Margin = new Padding(0, 0, 8, 0), Tag = key };
+            b.Click += (_, _) => { _filter = key; UpdateTabs(); Refresh4(); };
+            _tabs[key] = b;
+            tabBar.Controls.Add(b);
+        }
 
         _list.Dock = DockStyle.Fill;
         Theme.ModernList(_list);
         _list.HeaderStyle = ColumnHeaderStyle.Clickable; // click a header to sort
-        _list.Columns.Add(L.S("exp_id"), 90);
-        _list.Columns.Add(L.S("exp_name"), 160);
+        _list.Columns.Add(L.S("exp_item"), 175);
+        _list.Columns.Add(L.S("exp_kind"), 120);   // Type
+        _list.Columns.Add(L.S("exp_date"), 100);   // Expires / Due
+        _list.Columns.Add(L.S("exp_days"), 70);
+        _list.Columns.Add(L.S("exp_repeat"), 90);
+        _list.Columns.Add(L.S("exp_id"), 100);
         _list.Columns.Add(L.S("exp_country"), 110);
-        _list.Columns.Add(L.S("exp_kind"), 120);
-        _list.Columns.Add(L.S("exp_date"), 100);
-        _list.Columns.Add(L.S("exp_days"), 80);
-        _list.Columns.Add(L.S("exp_doc"), 240);
         _list.ColumnClick += (_, e) => SortBy(e.Column);
         _list.DoubleClick += (_, _) => EditSelected();
 
+        Button Btn(string key, bool primary)
+        {
+            var b = new Button
+            {
+                Text = L.S(key), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                Padding = new Padding(12, 4, 12, 4), Margin = new Padding(8, 0, 0, 0),
+                Font = new Font("Segoe UI", 9.5f, primary ? FontStyle.Bold : FontStyle.Regular),
+                BackColor = primary ? Accent : Color.White, ForeColor = primary ? Color.White : Color.Black,
+                Tag = primary ? "primary" : null,
+            };
+            b.FlatAppearance.BorderColor = primary ? Accent : Color.LightGray;
+            return b;
+        }
+
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 48, Padding = new Padding(10, 7, 10, 7) };
-        var remove = new Button { Text = L.S("remove"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(12, 4, 12, 4) };
-        remove.FlatAppearance.BorderColor = Color.LightGray;
+        var remove = Btn("remove", false);
         remove.Click += (_, _) =>
         {
             foreach (ListViewItem it in _list.SelectedItems)
                 if (it.Tag is Reminders.Item ri) Reminders.Remove(ri.File);
             Refresh4();
         };
-        var edit = new Button { Text = L.S("exp_edit"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(12, 4, 12, 4), Margin = new Padding(8, 0, 0, 0) };
-        edit.FlatAppearance.BorderColor = Color.LightGray;
+        var edit = Btn("exp_edit", false);
         edit.Click += (_, _) => EditSelected();
-        var add = new Button
-        {
-            Text = L.S("exp_add"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-            Padding = new Padding(12, 4, 12, 4), Tag = "primary", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White, Margin = new Padding(8, 0, 0, 0),
-        };
-        add.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        var addTask = Btn("exp_add_task", false);
+        addTask.Click += (_, _) => { using var d = new TaskAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = "task"; UpdateTabs(); Refresh4(); } };
+        var add = Btn("exp_add", true);
         add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
         bar.Controls.Add(edit);
+        bar.Controls.Add(addTask);
         bar.Controls.Add(add);
 
         Controls.Add(_list);
+        Controls.Add(tabBar);
         Controls.Add(bar);
-        Load += (_, _) => Refresh4();
+        Load += (_, _) => { UpdateTabs(); Refresh4(); };
         Theme.Apply(this);
     }
+
+    private void UpdateTabs()
+    {
+        foreach (var (key, b) in _tabs)
+        {
+            bool on = key == _filter;
+            b.BackColor = on ? Accent : (Theme.IsDark ? Color.FromArgb(50, 52, 63) : Color.White);
+            b.ForeColor = on ? Color.White : (Theme.IsDark ? Color.FromArgb(232, 233, 240) : Color.Black);
+            b.FlatAppearance.BorderColor = on ? Accent : Color.LightGray;
+            b.Font = new Font("Segoe UI", 9.5f, on ? FontStyle.Bold : FontStyle.Regular);
+        }
+    }
+
+    private static string Cat(Reminders.Item i) =>
+        i.Category.Length > 0 ? i.Category : Reminders.Categorize(i.Kind);
 
     // Manually scan a document the user picks (e.g. a passport already filed) and
     // record its expiry — the same backend-independent scan the watcher uses.
@@ -845,18 +885,18 @@ public sealed class ExpiryForm : Form
     private void Refresh4()
     {
         _list.Items.Clear();
-        var all = Reminders.All();
-        foreach (var i in all)
+        var shown = Reminders.All().Where(i => _filter == "all" || Cat(i) == _filter).ToList();
+        foreach (var i in shown)
         {
             int d = Reminders.DaysLeft(i);
             var item = new ListViewItem(new[]
-            { i.Id, i.Name, i.Country, i.Kind, i.Date, d < 0 ? "—" : d.ToString(), Path.GetFileName(i.File) }) { Tag = i };
+            { i.Label, i.Kind, i.Date, d < 0 ? "—" : d.ToString(), Reminders.RepeatLabel(i.Repeat), i.Id, i.Country }) { Tag = i };
             if (d < 14) item.ForeColor = Color.OrangeRed;
             else if (d < 30) item.ForeColor = Color.DarkOrange;
             _list.Items.Add(item);
         }
-        if (all.Count == 0)
-            _list.Items.Add(new ListViewItem(new[] { "", "", "", "", "", "", L.S("exp_empty") }));
+        if (shown.Count == 0)
+            _list.Items.Add(new ListViewItem(new[] { L.S(_filter == "task" ? "exp_empty_task" : "exp_empty"), "", "", "", "", "", "" }));
         else
         {
             _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc);
@@ -867,7 +907,7 @@ public sealed class ExpiryForm : Form
 
     // Size every column to its widest cell/header so no text is clipped, but keep
     // a comfortable minimum so empty columns (e.g. a missing Name) stay readable.
-    private static readonly int[] MinCol = { 90, 150, 120, 130, 100, 75, 200 };
+    private static readonly int[] MinCol = { 175, 120, 90, 60, 80, 90, 105 };
     private void AutoSizeColumns()
     {
         for (int i = 0; i < _list.Columns.Count; i++)
@@ -906,9 +946,9 @@ public sealed class ExpiryForm : Form
             var a = ((ListViewItem)x!).SubItems[_col].Text;
             var b = ((ListViewItem)y!).SubItems[_col].Text;
             int cmp;
-            if (_col == 4) // Expires (yyyy-MM-dd)
+            if (_col == 2) // Expires (yyyy-MM-dd)
                 cmp = string.CompareOrdinal(a, b);
-            else if (_col == 5) // Days left
+            else if (_col == 3) // Days left
                 cmp = DayValue(a).CompareTo(DayValue(b));
             else
                 cmp = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
@@ -920,45 +960,35 @@ public sealed class ExpiryForm : Form
     }
 }
 
-/// <summary>Small dialog to fill in / fix a reminder's fields (ID is optional).</summary>
-public sealed class ReminderEditForm : Form
+/// <summary>Shared helpers for building a labelled field grid + a save/cancel bar.</summary>
+internal static class DialogUi
 {
-    private readonly Reminders.Item _item;
-    private readonly TextBox _id = new();
-    private readonly TextBox _name = new();
-    private readonly TextBox _country = new();
-    private readonly TextBox _kind = new();
-    private readonly TextBox _date = new();
-    private readonly TextBox _leads = new();
+    public static TableLayoutPanel Grid(int rows) =>
+        new() { Dock = DockStyle.Top, ColumnCount = 2, RowCount = rows, Padding = new Padding(16, 14, 16, 6), AutoSize = true,
+                ColumnStyles = { new ColumnStyle(SizeType.Absolute, 116), new ColumnStyle(SizeType.Percent, 100) } };
 
-    public ReminderEditForm(Reminders.Item item)
+    public static void Row(TableLayoutPanel grid, int r, string labelKey, Control field, string? placeholder = null)
     {
-        _item = item;
-        Text = L.S("exp_edit_title");
-        Icon = AppArt.Load();
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false; MinimizeBox = false;
-        ClientSize = new Size(440, 312);
-        Font = new Font("Segoe UI", 9.5f);
+        grid.Controls.Add(new Label { Text = L.S(labelKey), AutoSize = true, Margin = new Padding(0, 8, 8, 0) }, 0, r);
+        field.Dock = DockStyle.Fill; field.Margin = new Padding(0, 4, 0, 4);
+        if (field is TextBox tb && placeholder is not null) tb.PlaceholderText = placeholder;
+        grid.Controls.Add(field, 1, r);
+    }
 
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 6, Padding = new Padding(16, 14, 16, 6), AutoSize = true };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        void Row(int r, string key, TextBox tb, string val, string? placeholder = null)
-        {
-            grid.Controls.Add(new Label { Text = L.S(key), AutoSize = true, Margin = new Padding(0, 8, 8, 0) }, 0, r);
-            tb.Dock = DockStyle.Fill; tb.Text = val; tb.Margin = new Padding(0, 4, 0, 4);
-            if (placeholder is not null) tb.PlaceholderText = placeholder;
-            grid.Controls.Add(tb, 1, r);
-        }
-        Row(0, "exp_id", _id, _item.Id, L.S("exp_id_hint"));
-        Row(1, "exp_name", _name, _item.Name);
-        Row(2, "exp_country", _country, _item.Country);
-        Row(3, "exp_kind", _kind, _item.Kind);
-        Row(4, "exp_date", _date, _item.Date, "yyyy-MM-dd");
-        Row(5, "exp_leads", _leads, string.Join(", ", _item.LeadDays), L.S("exp_leads_hint"));
+    public static ComboBox RepeatCombo(string current)
+    {
+        var c = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        foreach (var k in Reminders.RepeatKeys) c.Items.Add(L.S(k));
+        int i = Array.IndexOf(Reminders.RepeatVals, current);
+        c.SelectedIndex = i < 0 ? 0 : i;
+        return c;
+    }
 
+    public static string RepeatValue(ComboBox c) =>
+        c.SelectedIndex >= 0 && c.SelectedIndex < Reminders.RepeatVals.Length ? Reminders.RepeatVals[c.SelectedIndex] : "";
+
+    public static (FlowLayoutPanel bar, Button save, Button cancel) SaveBar(Form f, Action onSave)
+    {
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 52, Padding = new Padding(12, 10, 12, 10) };
         var save = new Button
         {
@@ -967,20 +997,98 @@ public sealed class ReminderEditForm : Form
             BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
         };
         save.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
-        save.Click += (_, _) =>
-        {
-            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text, _leads.Text);
-            DialogResult = DialogResult.OK; Close();
-        };
+        save.Click += (_, _) => onSave();
         var cancel = new Button { Text = L.S("cancel"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(14, 5, 14, 5), Margin = new Padding(8, 0, 0, 0) };
         cancel.FlatAppearance.BorderColor = Color.LightGray;
-        cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
-        bar.Controls.Add(save);
-        bar.Controls.Add(cancel);
+        cancel.Click += (_, _) => { f.DialogResult = DialogResult.Cancel; f.Close(); };
+        bar.Controls.Add(save); bar.Controls.Add(cancel);
+        f.AcceptButton = save; f.CancelButton = cancel;
+        return (bar, save, cancel);
+    }
+}
+
+/// <summary>Dialog to fill in / fix a reminder's fields (documents and tasks).</summary>
+public sealed class ReminderEditForm : Form
+{
+    private readonly Reminders.Item _item;
+    private readonly TextBox _title = new();
+    private readonly TextBox _id = new();
+    private readonly TextBox _name = new();
+    private readonly TextBox _country = new();
+    private readonly TextBox _kind = new();
+    private readonly TextBox _date = new();
+    private readonly TextBox _leads = new();
+    private readonly ComboBox _repeat;
+
+    public ReminderEditForm(Reminders.Item item)
+    {
+        _item = item;
+        _repeat = DialogUi.RepeatCombo(item.Repeat);
+        Text = L.S("exp_edit_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false; MinimizeBox = false;
+        ClientSize = new Size(450, 384);
+        Font = new Font("Segoe UI", 9.5f);
+
+        var grid = DialogUi.Grid(8);
+        DialogUi.Row(grid, 0, "exp_item", _title); _title.Text = item.Title;
+        DialogUi.Row(grid, 1, "exp_kind", _kind); _kind.Text = item.Kind;
+        DialogUi.Row(grid, 2, "exp_date", _date, "yyyy-MM-dd"); _date.Text = item.Date;
+        DialogUi.Row(grid, 3, "exp_repeat", _repeat);
+        DialogUi.Row(grid, 4, "exp_id", _id, L.S("exp_id_hint")); _id.Text = item.Id;
+        DialogUi.Row(grid, 5, "exp_name", _name); _name.Text = item.Name;
+        DialogUi.Row(grid, 6, "exp_country", _country); _country.Text = item.Country;
+        DialogUi.Row(grid, 7, "exp_leads", _leads, L.S("exp_leads_hint")); _leads.Text = string.Join(", ", item.LeadDays);
+
+        var (bar, _, _) = DialogUi.SaveBar(this, () =>
+        {
+            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text, _leads.Text,
+                             _title.Text, DialogUi.RepeatValue(_repeat));
+            DialogResult = DialogResult.OK; Close();
+        });
 
         Controls.Add(grid);
         Controls.Add(bar);
-        AcceptButton = save; CancelButton = cancel;
+        Theme.Apply(this);
+    }
+}
+
+/// <summary>Dialog to add a personal task ("Take dog to vet"), optionally recurring.</summary>
+public sealed class TaskAddForm : Form
+{
+    private readonly TextBox _title = new();
+    private readonly TextBox _date = new();
+    private readonly TextBox _leads = new();
+    private readonly ComboBox _repeat;
+
+    public TaskAddForm()
+    {
+        _repeat = DialogUi.RepeatCombo("");
+        Text = L.S("task_add_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false; MinimizeBox = false;
+        ClientSize = new Size(450, 240);
+        Font = new Font("Segoe UI", 9.5f);
+
+        var grid = DialogUi.Grid(4);
+        DialogUi.Row(grid, 0, "exp_item", _title, L.S("task_hint"));
+        DialogUi.Row(grid, 1, "exp_date", _date, "yyyy-MM-dd"); _date.Text = DateTime.Today.ToString("yyyy-MM-dd");
+        DialogUi.Row(grid, 2, "exp_repeat", _repeat);
+        DialogUi.Row(grid, 3, "exp_leads", _leads, L.S("exp_leads_hint"));
+
+        var (bar, _, _) = DialogUi.SaveBar(this, () =>
+        {
+            if (string.IsNullOrWhiteSpace(_title.Text)) { _title.Focus(); return; }
+            Reminders.AddTask(_title.Text, _date.Text, DialogUi.RepeatValue(_repeat), Reminders.ParseDays(_leads.Text));
+            DialogResult = DialogResult.OK; Close();
+        });
+
+        Controls.Add(grid);
+        Controls.Add(bar);
         Theme.Apply(this);
     }
 }
