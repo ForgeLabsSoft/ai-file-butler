@@ -26,8 +26,10 @@ public static class ExpiryScanner
 
     private static readonly string[] ExpiryWords =
     {
-        "expiry", "expiration", "expires", "expire", "valid until", "valid to",
-        "date of expiry", "expiră", "expira", "valabil", "valabilitate", "valable",
+        "expiry", "expiration", "expires", "expire", "valid until", "valid till", "valid to",
+        "date of expiry", "expiră", "expira", "valabil", "valabilitate", "valable", "valable jusqu",
+        "gültig bis", "gultig bis", "scadenza", "válido hasta", "valido hasta", "geldig tot",
+        "ważne do", "wazne do", "4b.", "4b ", // EU driving-licence expiry field
     };
 
     // keyword(s) -> friendly document kind. Most specific first.
@@ -37,7 +39,10 @@ public static class ExpiryScanner
         (new[] { "residence permit", "biometric residence", "permis de ședere", "permis de sedere" }, "Residence permit"),
         (new[] { "right to work", "share code" }, "Right to work"),
         (new[] { "visa", "viză", "viza" }, "Visa"),
-        (new[] { "driving licence", "driver license", "driving license", "permis de conducere" }, "Driving licence"),
+        (new[] { "driving licence", "driver license", "driver's license", "drivers license", "driving license",
+                 "permis de conducere", "permis de conduire", "führerschein", "fuhrerschein",
+                 "patente di guida", "permiso de conducción", "permiso de conduccion",
+                 "carteira de motorista", "rijbewijs", "körkort", "korkort", "prawo jazdy" }, "Driving licence"),
         (new[] { "national insurance" }, "National Insurance"),
         (new[] { "identity card", "id card", "carte de identitate", "buletin" }, "ID card"),
         (new[] { "mot certificate", " mot " }, "MOT"),
