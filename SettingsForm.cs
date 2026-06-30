@@ -815,11 +815,14 @@ public sealed class ExpiryForm : Form
         edit.Click += (_, _) => EditSelected();
         var addTask = Btn("exp_add_task", false);
         addTask.Click += (_, _) => { using var d = new TaskAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = "task"; ApplyScheme(); UpdateTabs(); Refresh4(); } };
+        var addManual = Btn("exp_add_manual", false);
+        addManual.Click += (_, _) => { using var d = new DocAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = d.ResultCategory; ApplyScheme(); UpdateTabs(); Refresh4(); } };
         var add = Btn("exp_add", true);
         add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
         bar.Controls.Add(edit);
         bar.Controls.Add(addTask);
+        bar.Controls.Add(addManual);
         bar.Controls.Add(add);
 
         Controls.Add(_list);
@@ -839,12 +842,13 @@ public sealed class ExpiryForm : Form
     {
         "task" => (new[] { L.S("exp_task"), L.S("exp_repeat"), L.S("exp_due"), L.S("exp_days") },
                    2, 3, new[] { 230, 120, 110, 80 }),
+        // Documents keep Start date + ID (and ID type); these don't appear elsewhere
         "id" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_idtype"), L.S("exp_date"), L.S("exp_days") },
                    5, 6, new[] { 110, 110, 160, 120, 130, 100, 70 }),
-        "renewal" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days") },
-                   5, 6, new[] { 110, 110, 160, 120, 130, 100, 70 }),
-        _ => (new[] { L.S("exp_item"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days"), L.S("exp_repeat"), L.S("exp_id"), L.S("exp_country") },
-                   2, 3, new[] { 175, 120, 90, 60, 80, 90, 105 }),
+        "renewal" => (new[] { L.S("exp_item"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days") },
+                   2, 3, new[] { 240, 150, 100, 70 }),
+        _ => (new[] { L.S("exp_item"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days"), L.S("exp_repeat") },
+                   2, 3, new[] { 230, 150, 100, 70, 90 }),
     };
 
     private void ApplyScheme()
@@ -859,8 +863,9 @@ public sealed class ExpiryForm : Form
     private string[] RowFor(Reminders.Item i, string days) => _filter switch
     {
         "task" => new[] { i.Label, Reminders.RepeatLabel(i.Repeat), i.Date, days },
-        "id" or "renewal" => new[] { i.Start, i.Id, i.Name, i.Country, i.Kind, i.Date, days },
-        _ => new[] { i.Label, i.Kind, i.Date, days, Reminders.RepeatLabel(i.Repeat), i.Id, i.Country },
+        "id" => new[] { i.Start, i.Id, i.Name, i.Country, i.Kind, i.Date, days },
+        "renewal" => new[] { i.Label, i.Kind, i.Date, days },
+        _ => new[] { i.Label, i.Kind, i.Date, days, Reminders.RepeatLabel(i.Repeat) },
     };
 
     private void UpdateTabs()
@@ -1098,16 +1103,29 @@ public sealed class ReminderEditForm : Form
         ClientSize = new Size(450, 426);
         Font = new Font("Segoe UI", 9.5f);
 
-        var grid = DialogUi.Grid(9);
-        DialogUi.Row(grid, 0, "exp_item", _title); _title.Text = item.Title;
-        DialogUi.Row(grid, 1, "exp_start", _start);   // Start date â€” before the ID
-        DialogUi.Row(grid, 2, "exp_id", _id, L.S("exp_id_hint")); _id.Text = item.Id;
-        DialogUi.Row(grid, 3, "exp_name", _name); _name.Text = item.Name;
-        DialogUi.Row(grid, 4, "exp_country", _country); _country.Text = item.Country;
-        DialogUi.Row(grid, 5, "exp_idtype", _kind);
-        DialogUi.Row(grid, 6, "exp_date", _expires);  // Expires
-        DialogUi.Row(grid, 7, "exp_repeat", _repeat);
-        DialogUi.Row(grid, 8, "exp_leads", _leads, L.S("exp_leads_hint")); _leads.Text = string.Join(", ", item.LeadDays);
+        _title.Text = item.Title; _id.Text = item.Id; _name.Text = item.Name;
+        _country.Text = item.Country; _leads.Text = string.Join(", ", item.LeadDays);
+
+        // Show only the fields relevant to this kind of reminder. Start date + ID
+        // belong to documents only.
+        string cat = item.Category.Length > 0 ? item.Category : Reminders.Categorize(item.Kind);
+        bool isTask = cat == "task", isDoc = cat == "id";
+        var rows = new List<(string Key, Control Field, string? Ph)>();
+        rows.Add(isTask ? ("exp_task", _title, L.S("task_hint")) : ("exp_name", _name, null));
+        if (isDoc)
+        {
+            rows.Add(("exp_start", _start, null));   // Start date — documents only
+            rows.Add(("exp_id", _id, L.S("exp_id_hint")));
+            rows.Add(("exp_country", _country, null));
+        }
+        if (!isTask) rows.Add(("exp_idtype", _kind, null));
+        rows.Add((isTask ? "exp_due" : "exp_date", _expires, null));
+        if (!isDoc) rows.Add(("exp_repeat", _repeat, null));
+        rows.Add(("exp_leads", _leads, L.S("exp_leads_hint")));
+
+        var grid = DialogUi.Grid(rows.Count);
+        for (int r = 0; r < rows.Count; r++) DialogUi.Row(grid, r, rows[r].Key, rows[r].Field, rows[r].Ph);
+        ClientSize = new Size(450, rows.Count * 38 + 92);
 
         var (bar, _, _) = DialogUi.SaveBar(this, () =>
         {
@@ -1153,6 +1171,56 @@ public sealed class TaskAddForm : Form
         {
             if (string.IsNullOrWhiteSpace(_title.Text)) { _title.Focus(); return; }
             Reminders.AddTask(_title.Text, DialogUi.DateValue(_date), DialogUi.RepeatValue(_repeat), Reminders.ParseDays(_leads.Text));
+            DialogResult = DialogResult.OK; Close();
+        });
+
+        Controls.Add(grid);
+        Controls.Add(bar);
+        Theme.Apply(this);
+    }
+}
+
+/// <summary>Dialog to add a document by hand: ID type, number, holder, start date
+/// and expiry — no file/scan needed (e.g. tracking a person's ID and start date).</summary>
+public sealed class DocAddForm : Form
+{
+    private readonly ComboBox _kind;
+    private readonly TextBox _name = new();
+    private readonly TextBox _id = new();
+    private readonly TextBox _country = new();
+    private readonly TextBox _leads = new();
+    private readonly DateTimePicker _start;
+    private readonly DateTimePicker _expires;
+
+    public string ResultCategory { get; private set; } = "id";
+
+    public DocAddForm()
+    {
+        _kind = DialogUi.KindCombo("Passport");
+        _start = DialogUi.DatePicker(DateTime.Today.ToString("yyyy-MM-dd"), optional: true);
+        _expires = DialogUi.DatePicker(DateTime.Today.AddYears(1).ToString("yyyy-MM-dd"), optional: false);
+        Text = L.S("doc_add_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false; MinimizeBox = false;
+        ClientSize = new Size(450, 372);
+        Font = new Font("Segoe UI", 9.5f);
+
+        var grid = DialogUi.Grid(7);
+        DialogUi.Row(grid, 0, "exp_idtype", _kind);
+        DialogUi.Row(grid, 1, "exp_name", _name);
+        DialogUi.Row(grid, 2, "exp_start", _start);
+        DialogUi.Row(grid, 3, "exp_id", _id, L.S("exp_id_hint"));
+        DialogUi.Row(grid, 4, "exp_country", _country);
+        DialogUi.Row(grid, 5, "exp_date", _expires);
+        DialogUi.Row(grid, 6, "exp_leads", _leads, L.S("exp_leads_hint"));
+
+        var (bar, _, _) = DialogUi.SaveBar(this, () =>
+        {
+            ResultCategory = Reminders.Categorize(_kind.Text);
+            Reminders.AddDocument(_kind.Text, _id.Text, _name.Text, _country.Text,
+                                  DialogUi.DateValue(_start), DialogUi.DateValue(_expires), Reminders.ParseDays(_leads.Text));
             DialogResult = DialogResult.OK; Close();
         });
 

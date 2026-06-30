@@ -55,6 +55,24 @@ public static class Reminders
         Save();
     }
 
+    /// <summary>Add a document by hand (no file): ID type, number, holder, country,
+    /// start date and expiry. Useful for tracking people / IDs you don't have a scan of.</summary>
+    public static void AddDocument(string idType, string id, string name, string country,
+                                   string startIso, string expiresIso, List<int>? leadDays = null)
+    {
+        if (!TryDate(expiresIso, out var d)) return; // an expiry is what we remind on
+        Load().Add(new Item
+        {
+            File = "doc://" + Guid.NewGuid().ToString("N"),
+            Category = Categorize(idType),
+            Kind = string.IsNullOrWhiteSpace(idType) ? "Document" : idType.Trim(),
+            Id = id.Trim(), Name = name.Trim(), Country = country.Trim(),
+            Start = TryDate(startIso, out var s) ? s.ToString("yyyy-MM-dd") : "",
+            Date = d.ToString("yyyy-MM-dd"), LeadDays = leadDays ?? new(),
+        });
+        Save();
+    }
+
     /// <summary>Roll any past-due recurring item forward to its next occurrence so
     /// it reminds again next cycle (weekly milk run, yearly vet visit, etc.).</summary>
     public static void RollRecurring()
