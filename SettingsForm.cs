@@ -125,10 +125,10 @@ public sealed class SettingsForm : Form
         Reg(dropHint, "drop_hint");
         Controls.Add(dropHint);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Width = 1 };
-        root.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
-        scroll.Controls.Add(root);
-        scroll.Resize += (_, _) => root.Width = scroll.ClientSize.Width - 4;
+        // Each section is docked full-width inside the scroll area (added bottom-up
+        // so the first ends up on top). This fills the window instead of leaving a
+        // big empty area on the right.
+        var sections = new List<Control>();
 
         // header: brand + subtitle + language picker
         var head = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 8) };
@@ -146,7 +146,7 @@ public sealed class SettingsForm : Form
         _lang.SelectedIndexChanged += (_, _) => OnLanguageChanged();
         langWrap.Controls.Add(_lang);
         head.Controls.Add(langWrap, 1, 0);
-        root.Controls.Add(head);
+        sections.Add(head);
 
         // watched folders (fixed height so it never eats the window)
         var gFolders = Group("folders");
@@ -161,7 +161,7 @@ public sealed class SettingsForm : Form
         fLayout.Controls.Add(fBtns, 1, 0);
         gFolders.Controls.Add(fLayout);
         gFolders.Height = 180;
-        root.Controls.Add(gFolders);
+        sections.Add(gFolders);
 
         // destination
         var gDest = Group("dest");
@@ -173,7 +173,7 @@ public sealed class SettingsForm : Form
         dLayout.Controls.Add(Reg(MakeButton("", (_, _) => BrowseDest(), false), "browse"), 1, 0);
         gDest.Controls.Add(dLayout);
         gDest.Height = 82;
-        root.Controls.Add(gDest);
+        sections.Add(gDest);
 
         // AI model
         var gModel = Group("model");
@@ -190,7 +190,7 @@ public sealed class SettingsForm : Form
         mLayout.Controls.Add(hint, 0, 2); mLayout.SetColumnSpan(hint, 2);
         gModel.Controls.Add(mLayout);
         gModel.Height = 110;
-        root.Controls.Add(gModel);
+        sections.Add(gModel);
 
         // behavior
         var gBehavior = Group("behavior");
@@ -204,11 +204,14 @@ public sealed class SettingsForm : Form
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
 
-        // reminder lead times (days before an expiry) — the global default
-        foreach (var n in new[] { _r1, _r2, _r3 }) { n.Minimum = 0; n.Maximum = 3650; n.Width = 64; }
-        var rem = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
-        rem.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 8, 0) }, "remind_days"));
-        rem.Controls.Add(_r1); rem.Controls.Add(_r2); rem.Controls.Add(_r3);
+        // reminder lead times (days before an expiry) — the global default.
+        // Label on its own line, the three boxes on the next, so nothing is clipped.
+        foreach (var n in new[] { _r1, _r2, _r3 }) { n.Minimum = 0; n.Maximum = 3650; n.Width = 64; n.Margin = new Padding(0, 0, 8, 0); }
+        var remBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
+        remBoxes.Controls.Add(_r1); remBoxes.Controls.Add(_r2); remBoxes.Controls.Add(_r3);
+        var rem = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0, 4, 0, 2) };
+        rem.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 0, 0, 0) }, "remind_days"));
+        rem.Controls.Add(remBoxes);
 
         var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, AutoSize = true };
         _auto.AutoSize = true; _startup.AutoSize = true; _dark.AutoSize = true; _expiryScan.AutoSize = true;
@@ -221,8 +224,8 @@ public sealed class SettingsForm : Form
         bWrap.Controls.Add(grid, 0, 5);
         bWrap.Controls.Add(rev, 0, 6);
         gBehavior.Controls.Add(bWrap);
-        gBehavior.Height = 250;
-        root.Controls.Add(gBehavior);
+        gBehavior.Height = 286;
+        sections.Add(gBehavior);
 
         // sorting schemes (music / movies / invoices)
         var gSort = Group("sorting");
@@ -243,7 +246,7 @@ public sealed class SettingsForm : Form
         sGrid.SetColumnSpan(_sepParties, 2);
         gSort.Controls.Add(sGrid);
         gSort.Height = 160;
-        root.Controls.Add(gSort);
+        sections.Add(gSort);
 
         // my rules (keyword -> folder)
         var gRules = Group("rules");
@@ -266,7 +269,15 @@ public sealed class SettingsForm : Form
         rWrap.SetColumnSpan(rWrap.GetControlFromPosition(0, 2)!, 2);
         gRules.Controls.Add(rWrap);
         gRules.Height = 200;
-        root.Controls.Add(gRules);
+        sections.Add(gRules);
+
+        // dock each section to the top (added in reverse so the first stays on top);
+        // Dock=Top makes every section span the full content width.
+        for (int i = sections.Count - 1; i >= 0; i--)
+        {
+            sections[i].Dock = DockStyle.Top;
+            scroll.Controls.Add(sections[i]);
+        }
     }
 
     private void AddRule()
