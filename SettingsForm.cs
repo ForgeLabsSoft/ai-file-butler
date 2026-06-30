@@ -712,23 +712,31 @@ public sealed class MemoriesForm : Form
 public sealed class ExpiryForm : Form
 {
     private readonly ListView _list = new();
+    private int _sortCol = 4;     // default: sort by Expires
+    private bool _sortAsc = true;
 
     public ExpiryForm()
     {
         Text = L.S("exp_title");
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(720, 480);
-        MinimumSize = new Size(520, 320);
+        Size = new Size(940, 520);
+        MinimumSize = new Size(640, 340);
         BackColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
 
         _list.Dock = DockStyle.Fill;
         Theme.ModernList(_list);
-        _list.Columns.Add(L.S("exp_doc"), 280);
-        _list.Columns.Add(L.S("exp_kind"), 150);
-        _list.Columns.Add(L.S("exp_date"), 110);
-        _list.Columns.Add(L.S("exp_days"), 100);
+        _list.HeaderStyle = ColumnHeaderStyle.Clickable; // click a header to sort
+        _list.Columns.Add(L.S("exp_id"), 90);
+        _list.Columns.Add(L.S("exp_name"), 160);
+        _list.Columns.Add(L.S("exp_country"), 110);
+        _list.Columns.Add(L.S("exp_kind"), 120);
+        _list.Columns.Add(L.S("exp_date"), 100);
+        _list.Columns.Add(L.S("exp_days"), 80);
+        _list.Columns.Add(L.S("exp_doc"), 240);
+        _list.ColumnClick += (_, e) => SortBy(e.Column);
+        _list.DoubleClick += (_, _) => EditSelected();
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 48, Padding = new Padding(10, 7, 10, 7) };
         var remove = new Button { Text = L.S("remove"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(12, 4, 12, 4) };
@@ -736,9 +744,12 @@ public sealed class ExpiryForm : Form
         remove.Click += (_, _) =>
         {
             foreach (ListViewItem it in _list.SelectedItems)
-                if (it.Tag is string f) Reminders.Remove(f);
+                if (it.Tag is Reminders.Item ri) Reminders.Remove(ri.File);
             Refresh4();
         };
+        var edit = new Button { Text = L.S("exp_edit"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(12, 4, 12, 4), Margin = new Padding(8, 0, 0, 0) };
+        edit.FlatAppearance.BorderColor = Color.LightGray;
+        edit.Click += (_, _) => EditSelected();
         var add = new Button
         {
             Text = L.S("exp_add"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
@@ -748,6 +759,7 @@ public sealed class ExpiryForm : Form
         add.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
         add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
+        bar.Controls.Add(edit);
         bar.Controls.Add(add);
 
         Controls.Add(_list);
@@ -778,7 +790,7 @@ public sealed class ExpiryForm : Form
                 btn.Enabled = true; btn.Text = L.S("exp_add");
                 if (t.Result is ExpiryScanner.Result r)
                 {
-                    Reminders.Record(path, r.Kind, r.Date);
+                    Reminders.Record(path, r.Kind, r.Date, r.Name, r.Country);
                     Refresh4();
                     MessageBox.Show(this, string.Format(L.S("exp_added"), r.Kind, r.Date), Text);
                 }
@@ -794,12 +806,135 @@ public sealed class ExpiryForm : Form
         foreach (var i in all)
         {
             int d = Reminders.DaysLeft(i);
-            var item = new ListViewItem(new[] { Path.GetFileName(i.File), i.Kind, i.Date, d < 0 ? "—" : d.ToString() }) { Tag = i.File };
+            var item = new ListViewItem(new[]
+            { i.Id, i.Name, i.Country, i.Kind, i.Date, d < 0 ? "—" : d.ToString(), Path.GetFileName(i.File) }) { Tag = i };
             if (d < 14) item.ForeColor = Color.OrangeRed;
             else if (d < 30) item.ForeColor = Color.DarkOrange;
             _list.Items.Add(item);
         }
-        if (all.Count == 0) _list.Items.Add(new ListViewItem(new[] { L.S("exp_empty"), "", "", "" }));
+        if (all.Count == 0)
+            _list.Items.Add(new ListViewItem(new[] { "", "", "", "", "", "", L.S("exp_empty") }));
+        else
+        {
+            _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc);
+            _list.Sort();
+        }
+        AutoSizeColumns();
+    }
+
+    // Size every column to its widest cell/header so no text is clipped (plus a
+    // little breathing room for the owner-drawn padding).
+    private void AutoSizeColumns()
+    {
+        foreach (ColumnHeader c in _list.Columns)
+        {
+            c.Width = -2;          // fit header + content
+            c.Width += 20;         // padding so owner-drawn text isn't cut off
+        }
+    }
+
+    private void SortBy(int col)
+    {
+        if (col == _sortCol) _sortAsc = !_sortAsc;
+        else { _sortCol = col; _sortAsc = true; }
+        _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc);
+        _list.Sort();
+    }
+
+    private void EditSelected()
+    {
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not Reminders.Item it) return;
+        using var dlg = new ReminderEditForm(it);
+        if (dlg.ShowDialog(this) == DialogResult.OK) Refresh4();
+    }
+
+    /// <summary>Sorts rows by a column: Expires as a date, Days left numerically
+    /// (expired first), everything else as text.</summary>
+    private sealed class RowComparer : System.Collections.IComparer
+    {
+        private readonly int _col;
+        private readonly int _dir;
+        public RowComparer(int col, bool asc) { _col = col; _dir = asc ? 1 : -1; }
+
+        public int Compare(object? x, object? y)
+        {
+            var a = ((ListViewItem)x!).SubItems[_col].Text;
+            var b = ((ListViewItem)y!).SubItems[_col].Text;
+            int cmp;
+            if (_col == 4) // Expires (yyyy-MM-dd)
+                cmp = string.CompareOrdinal(a, b);
+            else if (_col == 5) // Days left
+                cmp = DayValue(a).CompareTo(DayValue(b));
+            else
+                cmp = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+            return cmp * _dir;
+        }
+
+        private static int DayValue(string s) =>
+            s == "—" ? int.MinValue : (int.TryParse(s, out var n) ? n : int.MaxValue);
+    }
+}
+
+/// <summary>Small dialog to fill in / fix a reminder's fields (ID is optional).</summary>
+public sealed class ReminderEditForm : Form
+{
+    private readonly Reminders.Item _item;
+    private readonly TextBox _id = new();
+    private readonly TextBox _name = new();
+    private readonly TextBox _country = new();
+    private readonly TextBox _kind = new();
+    private readonly TextBox _date = new();
+
+    public ReminderEditForm(Reminders.Item item)
+    {
+        _item = item;
+        Text = L.S("exp_edit_title");
+        Icon = AppArt.Load();
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false; MinimizeBox = false;
+        ClientSize = new Size(420, 268);
+        Font = new Font("Segoe UI", 9.5f);
+
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 5, Padding = new Padding(16, 14, 16, 6), AutoSize = true };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        void Row(int r, string key, TextBox tb, string val, string? placeholder = null)
+        {
+            grid.Controls.Add(new Label { Text = L.S(key), AutoSize = true, Margin = new Padding(0, 8, 8, 0) }, 0, r);
+            tb.Dock = DockStyle.Fill; tb.Text = val; tb.Margin = new Padding(0, 4, 0, 4);
+            if (placeholder is not null) tb.PlaceholderText = placeholder;
+            grid.Controls.Add(tb, 1, r);
+        }
+        Row(0, "exp_id", _id, _item.Id, L.S("exp_id_hint"));
+        Row(1, "exp_name", _name, _item.Name);
+        Row(2, "exp_country", _country, _item.Country);
+        Row(3, "exp_kind", _kind, _item.Kind);
+        Row(4, "exp_date", _date, _item.Date, "yyyy-MM-dd");
+
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 52, Padding = new Padding(12, 10, 12, 10) };
+        var save = new Button
+        {
+            Text = L.S("save"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Padding = new Padding(14, 5, 14, 5), Tag = "primary", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            BackColor = Color.FromArgb(43, 139, 234), ForeColor = Color.White,
+        };
+        save.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
+        save.Click += (_, _) =>
+        {
+            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text);
+            DialogResult = DialogResult.OK; Close();
+        };
+        var cancel = new Button { Text = L.S("cancel"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(14, 5, 14, 5), Margin = new Padding(8, 0, 0, 0) };
+        cancel.FlatAppearance.BorderColor = Color.LightGray;
+        cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+        bar.Controls.Add(save);
+        bar.Controls.Add(cancel);
+
+        Controls.Add(grid);
+        Controls.Add(bar);
+        AcceptButton = save; CancelButton = cancel;
+        Theme.Apply(this);
     }
 }
 

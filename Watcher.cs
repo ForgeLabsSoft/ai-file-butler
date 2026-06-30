@@ -113,6 +113,8 @@ public sealed class Watcher
             if (found is null) return;
             expiry = found.Date;
             if (string.IsNullOrWhiteSpace(kind)) kind = found.Kind;
+            Reminders.Record(dst, kind ?? "", expiry!, found.Name, found.Country);
+            return;
         }
         Reminders.Record(dst, kind ?? "", expiry!);
     }

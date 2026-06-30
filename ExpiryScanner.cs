@@ -51,7 +51,7 @@ public static class ExpiryScanner
         (new[] { "certificate", "certificat" }, "Certificate"),
     };
 
-    public sealed record Result(string Kind, string Date);
+    public sealed record Result(string Kind, string Date, string Name = "", string Country = "");
 
     /// <summary>Scan filename + content for an expiry. Null if nothing convincing.</summary>
     public static Result? Scan(string fileName, string? text)
@@ -67,8 +67,64 @@ public static class ExpiryScanner
 
         var date = FindExpiry(hay, lower);
         if (date is null) return null;
-        return new Result(kind.Length == 0 ? "Document" : kind, date);
+        var (name, country) = ExtractIdentity(hay, lower);
+        return new Result(kind.Length == 0 ? "Document" : kind, date, name, country);
     }
+
+    // ISO-3166 alpha-3 → friendly country, for the most common cases. Unknown
+    // codes are returned as-is so something still shows.
+    private static readonly Dictionary<string, string> CountryCodes = new()
+    {
+        ["GBR"] = "United Kingdom", ["ROU"] = "Romania", ["USA"] = "United States",
+        ["IRL"] = "Ireland", ["FRA"] = "France", ["DEU"] = "Germany", ["ITA"] = "Italy",
+        ["ESP"] = "Spain", ["PRT"] = "Portugal", ["POL"] = "Poland", ["NLD"] = "Netherlands",
+        ["BEL"] = "Belgium", ["GRC"] = "Greece", ["BGR"] = "Bulgaria", ["HUN"] = "Hungary",
+        ["AUT"] = "Austria", ["CHE"] = "Switzerland", ["SWE"] = "Sweden", ["NOR"] = "Norway",
+        ["DNK"] = "Denmark", ["FIN"] = "Finland", ["CZE"] = "Czechia", ["MDA"] = "Moldova",
+        ["UKR"] = "Ukraine", ["IND"] = "India", ["CAN"] = "Canada", ["AUS"] = "Australia",
+    };
+
+    private static readonly (string Key, string Country)[] CountryWords =
+    {
+        ("united kingdom", "United Kingdom"), ("great britain", "United Kingdom"), ("british citizen", "United Kingdom"),
+        ("românia", "Romania"), ("romania", "Romania"), ("united states", "United States"),
+        ("ireland", "Ireland"), ("france", "France"), ("française", "France"), ("germany", "Germany"),
+        ("deutschland", "Germany"), ("italia", "Italy"), ("españa", "Spain"), ("polska", "Poland"),
+    };
+
+    /// <summary>Best-effort holder name + issuing country, mainly from the passport
+    /// machine-readable zone (most reliable), then a country-name fallback.</summary>
+    private static (string Name, string Country) ExtractIdentity(string hay, string lower)
+    {
+        string name = "", country = "";
+        var packed = Regex.Replace(hay.ToUpperInvariant(), @"[^A-Z0-9<]", "");
+        var m = Regex.Match(packed, @"P[<K][A-Z]{3}[A-Z<]{6,}");
+        if (m.Success)
+        {
+            var line = m.Value;
+            country = CountryCodes.TryGetValue(line.Substring(2, 3), out var c) ? c : line.Substring(2, 3);
+
+            var blob = line.Substring(5);
+            var parts = blob.Split(new[] { "<<" }, StringSplitOptions.None);
+            string surname = Clean(parts[0]);
+            string given = parts.Length > 1 ? Clean(parts[1]) : "";
+            name = TitleCase($"{given} {surname}".Trim());
+        }
+        if (country.Length == 0)
+            foreach (var (key, c) in CountryWords)
+                if (lower.Contains(key)) { country = c; break; }
+        return (name, country);
+    }
+
+    private static string Clean(string mrz)
+    {
+        var s = mrz.Replace('<', ' ');
+        s = Regex.Replace(s, @"\s{2,}.*$", ""); // drop filler / bleed into next field
+        return s.Trim();
+    }
+
+    private static string TitleCase(string s) =>
+        s.Length == 0 ? s : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.ToLowerInvariant());
 
     private static string GuessKind(string lower)
     {

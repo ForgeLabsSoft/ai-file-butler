@@ -50,8 +50,8 @@ public sealed class MainWindow : Form
         Text = "AI File Butler";
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(840, 560);
-        Size = new Size(980, 660);
+        MinimumSize = new Size(860, 560);
+        Size = new Size(1120, 680);
         Font = new Font("Segoe UI", 9.5f);
 
         BuildSidebar();
