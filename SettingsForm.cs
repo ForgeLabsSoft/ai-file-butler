@@ -115,6 +115,16 @@ public sealed class SettingsForm : Form
         Controls.Add(scroll);
         Controls.SetChildIndex(scroll, 0);
 
+        // Cap the content at a comfortable width on wide windows: docked sections
+        // honour the right padding, so extra space becomes a margin instead of
+        // stretching fields and pushing trailing buttons (Browse…) off the edge.
+        const int MaxContentWidth = 880;
+        scroll.Resize += (_, _) =>
+        {
+            int extra = Math.Max(0, scroll.ClientSize.Width - MaxContentWidth);
+            scroll.Padding = new Padding(16, 16, 16 + extra, 0);
+        };
+
         // drop hint (lands at the very top of the form)
         var dropHint = new Label
         {
@@ -163,16 +173,21 @@ public sealed class SettingsForm : Form
         gFolders.Height = 180;
         sections.Add(gFolders);
 
-        // destination
+        // destination — same proven pattern as Watched folders (path fills, button
+        // in a FlowLayoutPanel in the auto-size column) so Browse is never clipped
         var gDest = Group("dest");
-        var dLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, AutoSize = true };
+        var dLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         dLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         dLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _dest.Dock = DockStyle.Fill; _dest.Margin = new Padding(0, 6, 0, 6);
+        _dest.Dock = DockStyle.None;
+        _dest.Anchor = AnchorStyles.Left | AnchorStyles.Right; // full width, natural height, vertically centred
+        _dest.Margin = new Padding(0, 0, 8, 0);
+        var dBtns = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Anchor = AnchorStyles.None };
+        dBtns.Controls.Add(Reg(MakeButton("", (_, _) => BrowseDest(), false), "browse"));
         dLayout.Controls.Add(_dest, 0, 0);
-        dLayout.Controls.Add(Reg(MakeButton("", (_, _) => BrowseDest(), false), "browse"), 1, 0);
+        dLayout.Controls.Add(dBtns, 1, 0);
         gDest.Controls.Add(dLayout);
-        gDest.Height = 82;
+        gDest.Height = 96;
         sections.Add(gDest);
 
         // AI model
