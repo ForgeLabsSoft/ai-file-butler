@@ -21,6 +21,7 @@ public static class Reminders
         public string Category { get; set; } = "";  // "id" | "renewal" | "task"
         public string Title { get; set; } = "";     // for manual tasks (e.g. "Take dog to vet")
         public string Repeat { get; set; } = "";     // "", daily, weekly, monthly, yearly
+        public string Start { get; set; } = "";      // issue / start date (yyyy-MM-dd), optional
 
         /// <summary>What to show in the main column: a task's title, a holder name,
         /// otherwise the file name.</summary>
@@ -163,7 +164,7 @@ public static class Reminders
 
     /// <summary>Apply user edits to a stored item (documents or tasks).</summary>
     public static void Update(string file, string id, string name, string country, string kind,
-                              string dateStr, string leadDaysCsv, string title = "", string repeat = "")
+                              string dateStr, string leadDaysCsv, string title = "", string repeat = "", string start = "")
     {
         var item = Load().FirstOrDefault(x => string.Equals(x.File, file, StringComparison.OrdinalIgnoreCase));
         if (item is null) return;
@@ -172,6 +173,7 @@ public static class Reminders
         item.Country = country.Trim();
         item.Title = title.Trim();
         item.Repeat = Normalize(repeat);
+        item.Start = TryDate(start, out var sd) ? sd.ToString("yyyy-MM-dd") : "";
         if (!string.IsNullOrWhiteSpace(kind)) item.Kind = kind.Trim();
         if (TryDate(dateStr, out var d))
         {

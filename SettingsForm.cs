@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace AIFileButler;
@@ -56,7 +56,7 @@ public sealed class SettingsForm : Form
         _embedded = embedded;
         L.Lang = string.IsNullOrEmpty(cfg.Language) ? "en" : cfg.Language;
 
-        Text = "AI File Butler — Settings";
+        Text = "AI File Butler â€” Settings";
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(560, 600);
@@ -101,8 +101,8 @@ public sealed class SettingsForm : Form
         // --- bottom action bar (always visible) ---
         var bar = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(16, 10, 16, 10) };
         var actions = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
-        // Embedded in the main window: a single "Apply" button (no Close/Cancel —
-        // the user navigates away via the sidebar). Stand-alone: Save · Cancel · Help.
+        // Embedded in the main window: a single "Apply" button (no Close/Cancel â€”
+        // the user navigates away via the sidebar). Stand-alone: Save Â· Cancel Â· Help.
         actions.Controls.Add(Reg(MakeButton("", (_, _) => SaveAndClose(), true), _embedded ? "apply" : "save"));
         if (!_embedded)
             actions.Controls.Add(Reg(MakeButton("", (_, _) => Close(), false), "cancel"));
@@ -117,7 +117,7 @@ public sealed class SettingsForm : Form
 
         // Cap the content at a comfortable width on wide windows: docked sections
         // honour the right padding, so extra space becomes a margin instead of
-        // stretching fields and pushing trailing buttons (Browse…) off the edge.
+        // stretching fields and pushing trailing buttons (Browseâ€¦) off the edge.
         const int MaxContentWidth = 880;
         scroll.Resize += (_, _) =>
         {
@@ -173,7 +173,7 @@ public sealed class SettingsForm : Form
         gFolders.Height = 180;
         sections.Add(gFolders);
 
-        // destination — same proven pattern as Watched folders (path fills, button
+        // destination â€” same proven pattern as Watched folders (path fills, button
         // in a FlowLayoutPanel in the auto-size column) so Browse is never clipped
         var gDest = Group("dest");
         var dLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
@@ -219,7 +219,7 @@ public sealed class SettingsForm : Form
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
 
-        // reminder lead times (days before an expiry) — the global default.
+        // reminder lead times (days before an expiry) â€” the global default.
         // Label on its own line, the three boxes on the next, so nothing is clipped.
         foreach (var n in new[] { _r1, _r2, _r3 }) { n.Minimum = 0; n.Maximum = 3650; n.Width = 64; n.Margin = new Padding(0, 0, 8, 0); }
         var remBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
@@ -444,7 +444,7 @@ public sealed class SettingsForm : Form
 
 public enum WelcomeChoice { KeepManual, OpenSettings, EnableAuto }
 
-/// <summary>First-run welcome — explains the app and keeps it safe (manual) until
+/// <summary>First-run welcome â€” explains the app and keeps it safe (manual) until
 /// the user opts in. Returns the user's choice via <see cref="Choice"/>.</summary>
 public sealed class WelcomeForm : Form
 {
@@ -579,7 +579,7 @@ public sealed class PeopleForm : Form
         dlBanner.Controls.Add(dlLbl);
         dlBtn.Click += (_, _) =>
         {
-            dlBtn.Enabled = false; dlBtn.Text = "…";
+            dlBtn.Enabled = false; dlBtn.Text = "â€¦";
             Task.Run(FaceRecognizer.DownloadModel).ContinueWith(t =>
             {
                 if (IsDisposed) return;
@@ -615,7 +615,7 @@ public sealed class PeopleForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         var path = dlg.FileName;
-        _add.Enabled = false; _add.Text = "…";
+        _add.Enabled = false; _add.Text = "â€¦";
         Task.Run(() => FaceRecognizer.EmbedDominantFace(path)).ContinueWith(t =>
         {
             if (IsDisposed) return;
@@ -693,7 +693,7 @@ public sealed class HistoryForm : Form
         Refresh2();
     }
 
-    private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "…" + p[^30..];
+    private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "â€¦" + p[^30..];
 }
 
 /// <summary>Echo-inspired: "on this day" photos from past years + a library summary.</summary>
@@ -752,7 +752,7 @@ public sealed class MemoriesForm : Form
 }
 
 /// <summary>Reminders in three buckets: identity documents, renewals (insurance,
-/// tax, subscriptions…) and personal tasks. Documents/renewals are scanned;
+/// tax, subscriptionsâ€¦) and personal tasks. Documents/renewals are scanned;
 /// tasks are added by hand and can repeat.</summary>
 public sealed class ExpiryForm : Form
 {
@@ -778,7 +778,7 @@ public sealed class ExpiryForm : Form
         foreach (var (key, lk) in new[] { ("all", "exp_all"), ("id", "exp_cat_id"), ("renewal", "exp_cat_renewal"), ("task", "exp_cat_task") })
         {
             var b = new Button { Text = L.S(lk), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(14, 5, 14, 5), Margin = new Padding(0, 0, 8, 0), Tag = key };
-            b.Click += (_, _) => { _filter = key; UpdateTabs(); Refresh4(); };
+            b.Click += (_, _) => { _filter = key; ApplyScheme(); UpdateTabs(); Refresh4(); };
             _tabs[key] = b;
             tabBar.Controls.Add(b);
         }
@@ -786,13 +786,6 @@ public sealed class ExpiryForm : Form
         _list.Dock = DockStyle.Fill;
         Theme.ModernList(_list);
         _list.HeaderStyle = ColumnHeaderStyle.Clickable; // click a header to sort
-        _list.Columns.Add(L.S("exp_item"), 175);
-        _list.Columns.Add(L.S("exp_kind"), 120);   // Type
-        _list.Columns.Add(L.S("exp_date"), 100);   // Expires / Due
-        _list.Columns.Add(L.S("exp_days"), 70);
-        _list.Columns.Add(L.S("exp_repeat"), 90);
-        _list.Columns.Add(L.S("exp_id"), 100);
-        _list.Columns.Add(L.S("exp_country"), 110);
         _list.ColumnClick += (_, e) => SortBy(e.Column);
         _list.DoubleClick += (_, _) => EditSelected();
 
@@ -821,7 +814,7 @@ public sealed class ExpiryForm : Form
         var edit = Btn("exp_edit", false);
         edit.Click += (_, _) => EditSelected();
         var addTask = Btn("exp_add_task", false);
-        addTask.Click += (_, _) => { using var d = new TaskAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = "task"; UpdateTabs(); Refresh4(); } };
+        addTask.Click += (_, _) => { using var d = new TaskAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = "task"; ApplyScheme(); UpdateTabs(); Refresh4(); } };
         var add = Btn("exp_add", true);
         add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
@@ -832,9 +825,41 @@ public sealed class ExpiryForm : Form
         Controls.Add(_list);
         Controls.Add(tabBar);
         Controls.Add(bar);
-        Load += (_, _) => { UpdateTabs(); Refresh4(); };
+        Load += (_, _) => { ApplyScheme(); UpdateTabs(); Refresh4(); };
         Theme.Apply(this);
     }
+
+    // Column layouts per category. Documents/renewals keep the classic document
+    // fields (Start date Â· ID Â· Name Â· Country Â· Type Â· Expires Â· Days); tasks get
+    // a task-focused set; "All" stays a compact unified view.
+    private int _dateCol = 2, _daysCol = 3;
+    private int[] _minCols = { 175, 120, 90, 60, 80, 90, 105 };
+
+    private (string[] Headers, int Date, int Days, int[] Min) Scheme() => _filter switch
+    {
+        "task" => (new[] { L.S("exp_task"), L.S("exp_repeat"), L.S("exp_due"), L.S("exp_days") },
+                   2, 3, new[] { 230, 120, 110, 80 }),
+        "id" or "renewal" => (new[] { L.S("exp_start"), L.S("exp_id"), L.S("exp_name"), L.S("exp_country"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days") },
+                   5, 6, new[] { 110, 110, 160, 120, 130, 100, 70 }),
+        _ => (new[] { L.S("exp_item"), L.S("exp_kind"), L.S("exp_date"), L.S("exp_days"), L.S("exp_repeat"), L.S("exp_id"), L.S("exp_country") },
+                   2, 3, new[] { 175, 120, 90, 60, 80, 90, 105 }),
+    };
+
+    private void ApplyScheme()
+    {
+        var s = Scheme();
+        _list.Columns.Clear();
+        foreach (var h in s.Headers) _list.Columns.Add(h, 100);
+        _dateCol = s.Date; _daysCol = s.Days; _minCols = s.Min;
+        _sortCol = s.Date; _sortAsc = true; // default: soonest first
+    }
+
+    private string[] RowFor(Reminders.Item i, string days) => _filter switch
+    {
+        "task" => new[] { i.Label, Reminders.RepeatLabel(i.Repeat), i.Date, days },
+        "id" or "renewal" => new[] { i.Start, i.Id, i.Name, i.Country, i.Kind, i.Date, days },
+        _ => new[] { i.Label, i.Kind, i.Date, days, Reminders.RepeatLabel(i.Repeat), i.Id, i.Country },
+    };
 
     private void UpdateTabs()
     {
@@ -852,7 +877,7 @@ public sealed class ExpiryForm : Form
         i.Category.Length > 0 ? i.Category : Reminders.Categorize(i.Kind);
 
     // Manually scan a document the user picks (e.g. a passport already filed) and
-    // record its expiry — the same backend-independent scan the watcher uses.
+    // record its expiry â€” the same backend-independent scan the watcher uses.
     private void AddDocument(Button btn)
     {
         using var dlg = new OpenFileDialog
@@ -860,7 +885,7 @@ public sealed class ExpiryForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         var path = dlg.FileName;
-        btn.Enabled = false; btn.Text = "…";
+        btn.Enabled = false; btn.Text = "â€¦";
         Task.Run(() =>
         {
             var text = Extractor.Snippet(path, 4000);
@@ -889,17 +914,21 @@ public sealed class ExpiryForm : Form
         foreach (var i in shown)
         {
             int d = Reminders.DaysLeft(i);
-            var item = new ListViewItem(new[]
-            { i.Label, i.Kind, i.Date, d < 0 ? "—" : d.ToString(), Reminders.RepeatLabel(i.Repeat), i.Id, i.Country }) { Tag = i };
+            var item = new ListViewItem(RowFor(i, d < 0 ? "â€”" : d.ToString())) { Tag = i };
             if (d < 14) item.ForeColor = Color.OrangeRed;
             else if (d < 30) item.ForeColor = Color.DarkOrange;
             _list.Items.Add(item);
         }
         if (shown.Count == 0)
-            _list.Items.Add(new ListViewItem(new[] { L.S(_filter == "task" ? "exp_empty_task" : "exp_empty"), "", "", "", "", "", "" }));
+        {
+            var empty = new string[_list.Columns.Count];
+            for (int c = 0; c < empty.Length; c++) empty[c] = "";
+            empty[0] = L.S(_filter == "task" ? "exp_empty_task" : "exp_empty");
+            _list.Items.Add(new ListViewItem(empty));
+        }
         else
         {
-            _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc);
+            _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc, _dateCol, _daysCol);
             _list.Sort();
         }
         AutoSizeColumns();
@@ -907,13 +936,12 @@ public sealed class ExpiryForm : Form
 
     // Size every column to its widest cell/header so no text is clipped, but keep
     // a comfortable minimum so empty columns (e.g. a missing Name) stay readable.
-    private static readonly int[] MinCol = { 175, 120, 90, 60, 80, 90, 105 };
     private void AutoSizeColumns()
     {
         for (int i = 0; i < _list.Columns.Count; i++)
         {
             _list.Columns[i].Width = -2;                 // fit header + content
-            int min = i < MinCol.Length ? MinCol[i] : 90;
+            int min = i < _minCols.Length ? _minCols[i] : 90;
             _list.Columns[i].Width = Math.Max(_list.Columns[i].Width + 20, min);
         }
     }
@@ -922,7 +950,7 @@ public sealed class ExpiryForm : Form
     {
         if (col == _sortCol) _sortAsc = !_sortAsc;
         else { _sortCol = col; _sortAsc = true; }
-        _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc);
+        _list.ListViewItemSorter = new RowComparer(_sortCol, _sortAsc, _dateCol, _daysCol);
         _list.Sort();
     }
 
@@ -937,18 +965,18 @@ public sealed class ExpiryForm : Form
     /// (expired first), everything else as text.</summary>
     private sealed class RowComparer : System.Collections.IComparer
     {
-        private readonly int _col;
-        private readonly int _dir;
-        public RowComparer(int col, bool asc) { _col = col; _dir = asc ? 1 : -1; }
+        private readonly int _col, _dir, _dateCol, _daysCol;
+        public RowComparer(int col, bool asc, int dateCol, int daysCol)
+        { _col = col; _dir = asc ? 1 : -1; _dateCol = dateCol; _daysCol = daysCol; }
 
         public int Compare(object? x, object? y)
         {
             var a = ((ListViewItem)x!).SubItems[_col].Text;
             var b = ((ListViewItem)y!).SubItems[_col].Text;
             int cmp;
-            if (_col == 2) // Expires (yyyy-MM-dd)
+            if (_col == _dateCol) // a yyyy-MM-dd date column
                 cmp = string.CompareOrdinal(a, b);
-            else if (_col == 3) // Days left
+            else if (_col == _daysCol) // Days left
                 cmp = DayValue(a).CompareTo(DayValue(b));
             else
                 cmp = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
@@ -956,7 +984,7 @@ public sealed class ExpiryForm : Form
         }
 
         private static int DayValue(string s) =>
-            s == "—" ? int.MinValue : (int.TryParse(s, out var n) ? n : int.MaxValue);
+            s == "â€”" ? int.MinValue : (int.TryParse(s, out var n) ? n : int.MaxValue);
     }
 }
 
@@ -987,6 +1015,19 @@ internal static class DialogUi
     public static string RepeatValue(ComboBox c) =>
         c.SelectedIndex >= 0 && c.SelectedIndex < Reminders.RepeatVals.Length ? Reminders.RepeatVals[c.SelectedIndex] : "";
 
+    /// <summary>A date field with a calendar drop-down. When optional, an unchecked
+    /// box means "no date".</summary>
+    public static DateTimePicker DatePicker(string iso, bool optional)
+    {
+        var dp = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", ShowCheckBox = optional };
+        if (Reminders.TryDate(iso, out var d)) { dp.Value = d; if (optional) dp.Checked = true; }
+        else if (optional) dp.Checked = false;
+        return dp;
+    }
+
+    public static string DateValue(DateTimePicker dp) =>
+        dp.ShowCheckBox && !dp.Checked ? "" : dp.Value.ToString("yyyy-MM-dd");
+
     public static (FlowLayoutPanel bar, Button save, Button cancel) SaveBar(Form f, Action onSave)
     {
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 52, Padding = new Padding(12, 10, 12, 10) };
@@ -1007,7 +1048,8 @@ internal static class DialogUi
     }
 }
 
-/// <summary>Dialog to fill in / fix a reminder's fields (documents and tasks).</summary>
+/// <summary>Dialog to fill in / fix a reminder's fields (documents and tasks).
+/// Dates use a calendar picker; the Start date is optional and sits before the ID.</summary>
 public sealed class ReminderEditForm : Form
 {
     private readonly Reminders.Item _item;
@@ -1016,36 +1058,41 @@ public sealed class ReminderEditForm : Form
     private readonly TextBox _name = new();
     private readonly TextBox _country = new();
     private readonly TextBox _kind = new();
-    private readonly TextBox _date = new();
     private readonly TextBox _leads = new();
     private readonly ComboBox _repeat;
+    private readonly DateTimePicker _start;
+    private readonly DateTimePicker _expires;
 
     public ReminderEditForm(Reminders.Item item)
     {
         _item = item;
         _repeat = DialogUi.RepeatCombo(item.Repeat);
+        _start = DialogUi.DatePicker(item.Start, optional: true);
+        _expires = DialogUi.DatePicker(item.Date, optional: false);
         Text = L.S("exp_edit_title");
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false;
-        ClientSize = new Size(450, 384);
+        ClientSize = new Size(450, 426);
         Font = new Font("Segoe UI", 9.5f);
 
-        var grid = DialogUi.Grid(8);
+        var grid = DialogUi.Grid(9);
         DialogUi.Row(grid, 0, "exp_item", _title); _title.Text = item.Title;
-        DialogUi.Row(grid, 1, "exp_kind", _kind); _kind.Text = item.Kind;
-        DialogUi.Row(grid, 2, "exp_date", _date, "yyyy-MM-dd"); _date.Text = item.Date;
-        DialogUi.Row(grid, 3, "exp_repeat", _repeat);
-        DialogUi.Row(grid, 4, "exp_id", _id, L.S("exp_id_hint")); _id.Text = item.Id;
-        DialogUi.Row(grid, 5, "exp_name", _name); _name.Text = item.Name;
-        DialogUi.Row(grid, 6, "exp_country", _country); _country.Text = item.Country;
-        DialogUi.Row(grid, 7, "exp_leads", _leads, L.S("exp_leads_hint")); _leads.Text = string.Join(", ", item.LeadDays);
+        DialogUi.Row(grid, 1, "exp_start", _start);   // Start date â€” before the ID
+        DialogUi.Row(grid, 2, "exp_id", _id, L.S("exp_id_hint")); _id.Text = item.Id;
+        DialogUi.Row(grid, 3, "exp_name", _name); _name.Text = item.Name;
+        DialogUi.Row(grid, 4, "exp_country", _country); _country.Text = item.Country;
+        DialogUi.Row(grid, 5, "exp_kind", _kind); _kind.Text = item.Kind;
+        DialogUi.Row(grid, 6, "exp_date", _expires);  // Expires
+        DialogUi.Row(grid, 7, "exp_repeat", _repeat);
+        DialogUi.Row(grid, 8, "exp_leads", _leads, L.S("exp_leads_hint")); _leads.Text = string.Join(", ", item.LeadDays);
 
         var (bar, _, _) = DialogUi.SaveBar(this, () =>
         {
-            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text, _leads.Text,
-                             _title.Text, DialogUi.RepeatValue(_repeat));
+            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text,
+                             DialogUi.DateValue(_expires), _leads.Text,
+                             _title.Text, DialogUi.RepeatValue(_repeat), DialogUi.DateValue(_start));
             DialogResult = DialogResult.OK; Close();
         });
 
@@ -1059,13 +1106,14 @@ public sealed class ReminderEditForm : Form
 public sealed class TaskAddForm : Form
 {
     private readonly TextBox _title = new();
-    private readonly TextBox _date = new();
     private readonly TextBox _leads = new();
     private readonly ComboBox _repeat;
+    private readonly DateTimePicker _date;
 
     public TaskAddForm()
     {
         _repeat = DialogUi.RepeatCombo("");
+        _date = DialogUi.DatePicker(DateTime.Today.ToString("yyyy-MM-dd"), optional: false);
         Text = L.S("task_add_title");
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterParent;
@@ -1076,14 +1124,14 @@ public sealed class TaskAddForm : Form
 
         var grid = DialogUi.Grid(4);
         DialogUi.Row(grid, 0, "exp_item", _title, L.S("task_hint"));
-        DialogUi.Row(grid, 1, "exp_date", _date, "yyyy-MM-dd"); _date.Text = DateTime.Today.ToString("yyyy-MM-dd");
+        DialogUi.Row(grid, 1, "exp_date", _date);
         DialogUi.Row(grid, 2, "exp_repeat", _repeat);
         DialogUi.Row(grid, 3, "exp_leads", _leads, L.S("exp_leads_hint"));
 
         var (bar, _, _) = DialogUi.SaveBar(this, () =>
         {
             if (string.IsNullOrWhiteSpace(_title.Text)) { _title.Focus(); return; }
-            Reminders.AddTask(_title.Text, _date.Text, DialogUi.RepeatValue(_repeat), Reminders.ParseDays(_leads.Text));
+            Reminders.AddTask(_title.Text, DialogUi.DateValue(_date), DialogUi.RepeatValue(_repeat), Reminders.ParseDays(_leads.Text));
             DialogResult = DialogResult.OK; Close();
         });
 
@@ -1127,3 +1175,5 @@ public sealed class HelpForm : Form
         Theme.Apply(this);
     }
 }
+
+
