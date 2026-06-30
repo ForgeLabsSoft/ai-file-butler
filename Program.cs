@@ -23,7 +23,7 @@ internal static class Program
                     var text = System.IO.File.Exists(input) ? Extractor.Snippet(input, 4000) : input;
                     var res = ExpiryScanner.Scan(System.IO.Path.GetFileName(input), text);
                     System.IO.File.WriteAllText("expiry-result.txt",
-                        res is null ? "none" : $"{res.Kind} | {res.Date} | name='{res.Name}' | country='{res.Country}'");
+                        res is null ? "none" : $"{res.Kind} | {res.Date} | id='{res.Id}' | name='{res.Name}' | country='{res.Country}'");
                     return;
                 }
                 case "--downloadmodel": // hidden: fetch the face model into the cache

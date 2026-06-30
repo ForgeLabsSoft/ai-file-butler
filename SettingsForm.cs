@@ -790,7 +790,7 @@ public sealed class ExpiryForm : Form
                 btn.Enabled = true; btn.Text = L.S("exp_add");
                 if (t.Result is ExpiryScanner.Result r)
                 {
-                    Reminders.Record(path, r.Kind, r.Date, r.Name, r.Country);
+                    Reminders.Record(path, r.Kind, r.Date, r.Name, r.Country, r.Id);
                     Refresh4();
                     MessageBox.Show(this, string.Format(L.S("exp_added"), r.Kind, r.Date), Text);
                 }
@@ -822,14 +822,16 @@ public sealed class ExpiryForm : Form
         AutoSizeColumns();
     }
 
-    // Size every column to its widest cell/header so no text is clipped (plus a
-    // little breathing room for the owner-drawn padding).
+    // Size every column to its widest cell/header so no text is clipped, but keep
+    // a comfortable minimum so empty columns (e.g. a missing Name) stay readable.
+    private static readonly int[] MinCol = { 90, 150, 120, 130, 100, 75, 200 };
     private void AutoSizeColumns()
     {
-        foreach (ColumnHeader c in _list.Columns)
+        for (int i = 0; i < _list.Columns.Count; i++)
         {
-            c.Width = -2;          // fit header + content
-            c.Width += 20;         // padding so owner-drawn text isn't cut off
+            _list.Columns[i].Width = -2;                 // fit header + content
+            int min = i < MinCol.Length ? MinCol[i] : 90;
+            _list.Columns[i].Width = Math.Max(_list.Columns[i].Width + 20, min);
         }
     }
 

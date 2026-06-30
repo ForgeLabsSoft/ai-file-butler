@@ -51,7 +51,7 @@ public static class ExpiryScanner
         (new[] { "certificate", "certificat" }, "Certificate"),
     };
 
-    public sealed record Result(string Kind, string Date, string Name = "", string Country = "");
+    public sealed record Result(string Kind, string Date, string Name = "", string Country = "", string Id = "");
 
     /// <summary>Scan filename + content for an expiry. Null if nothing convincing.</summary>
     public static Result? Scan(string fileName, string? text)
@@ -59,6 +59,19 @@ public static class ExpiryScanner
         var hay = (fileName + "\n" + (text ?? "")).Replace(' ', ' ');
         var lower = hay.ToLowerInvariant();
 
+        // 1) Universal path: parse the ICAO machine-readable zone. This recognises
+        //    passports, visas and ID cards from ANY country, and yields name,
+        //    issuing country, document number and expiry in one shot.
+        var mrz = Mrz.TryParse(hay);
+        if (mrz is not null)
+        {
+            var mk = GuessKind(lower);
+            if (mk.Length == 0) mk = KindFromDocType(mrz.DocType);
+            return new Result(mk, mrz.Expiry, mrz.Name, CodeToName(mrz.Country), mrz.Number);
+        }
+
+        // 2) Fallback for documents without an MRZ (insurance, car tax, letters…):
+        //    a regex date plus a keyword kind, with best-effort name/country.
         string kind = GuessKind(lower);
         bool hasExpiryWord = ExpiryWords.Any(w => lower.Contains(w));
         // Only act on things that look like real documents — avoids turning every
@@ -71,6 +84,17 @@ public static class ExpiryScanner
         return new Result(kind.Length == 0 ? "Document" : kind, date, name, country);
     }
 
+    private static string KindFromDocType(string t) => t.ToUpperInvariant() switch
+    {
+        "P" => "Passport",
+        "V" => "Visa",
+        "I" or "A" or "C" => "ID card",
+        _ => "Document",
+    };
+
+    private static string CodeToName(string code) =>
+        code.Length == 0 ? "" : (CountryCodes.TryGetValue(code, out var n) ? n : code);
+
     // ISO-3166 alpha-3 → friendly country, for the most common cases. Unknown
     // codes are returned as-is so something still shows.
     private static readonly Dictionary<string, string> CountryCodes = new()
@@ -82,6 +106,10 @@ public static class ExpiryScanner
         ["AUT"] = "Austria", ["CHE"] = "Switzerland", ["SWE"] = "Sweden", ["NOR"] = "Norway",
         ["DNK"] = "Denmark", ["FIN"] = "Finland", ["CZE"] = "Czechia", ["MDA"] = "Moldova",
         ["UKR"] = "Ukraine", ["IND"] = "India", ["CAN"] = "Canada", ["AUS"] = "Australia",
+        ["D"] = "Germany", ["GB"] = "United Kingdom", ["CHN"] = "China", ["JPN"] = "Japan",
+        ["TUR"] = "Türkiye", ["BRA"] = "Brazil", ["MEX"] = "Mexico", ["NZL"] = "New Zealand",
+        ["ZAF"] = "South Africa", ["RUS"] = "Russia", ["HRV"] = "Croatia", ["SVK"] = "Slovakia",
+        ["SVN"] = "Slovenia", ["LTU"] = "Lithuania", ["LVA"] = "Latvia", ["EST"] = "Estonia",
     };
 
     private static readonly (string Key, string Country)[] CountryWords =
