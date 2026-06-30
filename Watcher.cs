@@ -20,7 +20,6 @@ public sealed class Watcher
     private readonly Learner _learner = new();
     // path -> size for write-stability detection
     private readonly Dictionary<string, long> _seenSizes = new();
-    private readonly HashSet<string> _expiryNotified = new();
 
     public Watcher(Config cfg) => _cfg = cfg;
 
@@ -119,13 +118,18 @@ public sealed class Watcher
         Reminders.Record(dst, kind ?? "", expiry!);
     }
 
-    /// <summary>Notify about documents expiring within 30 days (once each per session).</summary>
+    /// <summary>Notify when a document crosses one of its reminder lead times
+    /// (global default or a per-document override). Each threshold fires once.</summary>
     public void CheckExpiries()
     {
-        foreach (var i in Reminders.Upcoming(30))
+        foreach (var i in Reminders.All())
         {
-            if (!_expiryNotified.Add(i.Date + "|" + i.File)) continue;
             int d = Reminders.DaysLeft(i);
+            var leads = Reminders.LeadFor(i, _cfg.ReminderDays);
+            var crossed = leads.Where(L => d <= L && !i.Notified.Contains(L)).ToList();
+            if (crossed.Count == 0) continue;
+
+            Reminders.MarkNotified(i.File, crossed);
             var msg = d < 0 ? string.Format(L.S("n_expired"), i.Kind)
                             : string.Format(L.S("n_expiring"), i.Kind, d);
             Notify?.Invoke(EventKind.Info, msg);

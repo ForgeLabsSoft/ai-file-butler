@@ -16,7 +16,30 @@ public static class Reminders
         public string Id { get; set; } = "";       // optional, user-filled (doc/policy number)
         public string Name { get; set; } = "";     // holder name (scanned, editable)
         public string Country { get; set; } = "";  // issuing country / origin (scanned, editable)
+        public List<int> LeadDays { get; set; } = new();  // per-doc lead times; empty = use global
+        public List<int> Notified { get; set; } = new();  // lead thresholds already notified
     }
+
+    /// <summary>The lead times to use for an item: its own override, or the global
+    /// default. Sorted soonest-expiry-first, positives only.</summary>
+    public static List<int> LeadFor(Item i, List<int> global) =>
+        (i.LeadDays.Count > 0 ? i.LeadDays : global)
+        .Where(x => x > 0).Distinct().OrderByDescending(x => x).ToList();
+
+    /// <summary>Mark lead thresholds as already notified for a document.</summary>
+    public static void MarkNotified(string file, IEnumerable<int> thresholds)
+    {
+        var i = Load().FirstOrDefault(x => string.Equals(x.File, file, StringComparison.OrdinalIgnoreCase));
+        if (i is null) return;
+        foreach (var t in thresholds) if (!i.Notified.Contains(t)) i.Notified.Add(t);
+        Save();
+    }
+
+    /// <summary>Parse a "90, 30, 7" string into a clean day list.</summary>
+    public static List<int> ParseDays(string csv) => csv
+        .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+        .Select(s => int.TryParse(s.Trim(), out var n) ? n : 0)
+        .Where(n => n > 0).Distinct().OrderByDescending(n => n).ToList();
 
     private static readonly string Path_ =
         System.IO.Path.Combine(AppContext.BaseDirectory, "reminders.json");
@@ -47,6 +70,7 @@ public static class Reminders
         if (existing is not null)
         {
             existing.Kind = string.IsNullOrWhiteSpace(kind) ? existing.Kind : kind;
+            if (existing.Date != iso) existing.Notified.Clear(); // date moved → remind again
             existing.Date = iso;
             // only fill scanned fields if we found something and the user hasn't set one
             if (existing.Name.Length == 0 && name.Length > 0) existing.Name = name;
@@ -61,8 +85,8 @@ public static class Reminders
         Save();
     }
 
-    /// <summary>Apply user edits (ID, name, country, kind, date) to a stored item.</summary>
-    public static void Update(string file, string id, string name, string country, string kind, string dateStr)
+    /// <summary>Apply user edits (ID, name, country, kind, date, lead times) to a stored item.</summary>
+    public static void Update(string file, string id, string name, string country, string kind, string dateStr, string leadDaysCsv)
     {
         var item = Load().FirstOrDefault(x => string.Equals(x.File, file, StringComparison.OrdinalIgnoreCase));
         if (item is null) return;
@@ -70,7 +94,15 @@ public static class Reminders
         item.Name = name.Trim();
         item.Country = country.Trim();
         if (!string.IsNullOrWhiteSpace(kind)) item.Kind = kind.Trim();
-        if (TryDate(dateStr, out var d)) item.Date = d.ToString("yyyy-MM-dd");
+        if (TryDate(dateStr, out var d))
+        {
+            var iso = d.ToString("yyyy-MM-dd");
+            if (item.Date != iso) item.Notified.Clear();
+            item.Date = iso;
+        }
+        var leads = ParseDays(leadDaysCsv);
+        if (!leads.SequenceEqual(item.LeadDays)) item.Notified.Clear(); // schedule changed → remind again
+        item.LeadDays = leads;
         Save();
     }
 

@@ -24,6 +24,9 @@ public sealed class SettingsForm : Form
     private readonly NumericUpDown _poll = new();
     private readonly NumericUpDown _minAge = new();
     private readonly NumericUpDown _review = new();
+    private readonly NumericUpDown _r1 = new();
+    private readonly NumericUpDown _r2 = new();
+    private readonly NumericUpDown _r3 = new();
     private readonly ComboBox _musicBy = new();
     private readonly ComboBox _movieBy = new();
     private readonly ComboBox _photoBy = new();
@@ -200,17 +203,25 @@ public sealed class SettingsForm : Form
         var rev = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 1, AutoSize = true };
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
-        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, AutoSize = true };
+
+        // reminder lead times (days before an expiry) — the global default
+        foreach (var n in new[] { _r1, _r2, _r3 }) { n.Minimum = 0; n.Maximum = 3650; n.Width = 64; }
+        var rem = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
+        rem.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 8, 0) }, "remind_days"));
+        rem.Controls.Add(_r1); rem.Controls.Add(_r2); rem.Controls.Add(_r3);
+
+        var bWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, AutoSize = true };
         _auto.AutoSize = true; _startup.AutoSize = true; _dark.AutoSize = true; _expiryScan.AutoSize = true;
         _dark.CheckedChanged += (_, _) => { Theme.IsDark = _dark.Checked; Theme.Apply(this); };
         bWrap.Controls.Add(Reg(_auto, "auto"), 0, 0);
         bWrap.Controls.Add(Reg(_expiryScan, "expiry_scan"), 0, 1);
-        bWrap.Controls.Add(Reg(_startup, "startup"), 0, 2);
-        bWrap.Controls.Add(Reg(_dark, "dark_mode"), 0, 3);
-        bWrap.Controls.Add(grid, 0, 4);
-        bWrap.Controls.Add(rev, 0, 5);
+        bWrap.Controls.Add(rem, 0, 2);
+        bWrap.Controls.Add(Reg(_startup, "startup"), 0, 3);
+        bWrap.Controls.Add(Reg(_dark, "dark_mode"), 0, 4);
+        bWrap.Controls.Add(grid, 0, 5);
+        bWrap.Controls.Add(rev, 0, 6);
         gBehavior.Controls.Add(bWrap);
-        gBehavior.Height = 214;
+        gBehavior.Height = 250;
         root.Controls.Add(gBehavior);
 
         // sorting schemes (music / movies / invoices)
@@ -303,6 +314,10 @@ public sealed class SettingsForm : Form
         _startup.Checked = Startup.IsEnabled;
         _dark.Checked = _cfg.DarkMode;
         _expiryScan.Checked = _cfg.ExpiryScan;
+        var rd = _cfg.ReminderDays;
+        _r1.Value = Math.Min(rd.Count > 0 ? rd[0] : 90, _r1.Maximum);
+        _r2.Value = Math.Min(rd.Count > 1 ? rd[1] : 30, _r2.Maximum);
+        _r3.Value = Math.Min(rd.Count > 2 ? rd[2] : 7, _r3.Maximum);
         _poll.Value = Math.Clamp(_cfg.PollIntervalSeconds, (int)_poll.Minimum, (int)_poll.Maximum);
         _minAge.Value = Math.Clamp(_cfg.MinAgeSeconds, (int)_minAge.Minimum, (int)_minAge.Maximum);
         _review.Value = Math.Clamp(_cfg.ReviewThreshold, (int)_review.Minimum, (int)_review.Maximum);
@@ -386,6 +401,8 @@ public sealed class SettingsForm : Form
         _cfg.Rules = _rulesList.Items.Cast<RuleEntry>().ToList();
         _cfg.AutoOrganize = _auto.Checked; // persist the auto-move state
         _cfg.ExpiryScan = _expiryScan.Checked;
+        _cfg.ReminderDays = new[] { (int)_r1.Value, (int)_r2.Value, (int)_r3.Value }
+            .Where(x => x > 0).Distinct().OrderByDescending(x => x).ToList();
         _cfg.DarkMode = _dark.Checked; Theme.IsDark = _dark.Checked;
         if (_lang.SelectedIndex >= 0) _cfg.Language = L.Languages[_lang.SelectedIndex].Code;
         try { _cfg.Save(); }
@@ -886,6 +903,7 @@ public sealed class ReminderEditForm : Form
     private readonly TextBox _country = new();
     private readonly TextBox _kind = new();
     private readonly TextBox _date = new();
+    private readonly TextBox _leads = new();
 
     public ReminderEditForm(Reminders.Item item)
     {
@@ -895,10 +913,10 @@ public sealed class ReminderEditForm : Form
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false;
-        ClientSize = new Size(420, 268);
+        ClientSize = new Size(440, 312);
         Font = new Font("Segoe UI", 9.5f);
 
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 5, Padding = new Padding(16, 14, 16, 6), AutoSize = true };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 6, Padding = new Padding(16, 14, 16, 6), AutoSize = true };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         void Row(int r, string key, TextBox tb, string val, string? placeholder = null)
@@ -913,6 +931,7 @@ public sealed class ReminderEditForm : Form
         Row(2, "exp_country", _country, _item.Country);
         Row(3, "exp_kind", _kind, _item.Kind);
         Row(4, "exp_date", _date, _item.Date, "yyyy-MM-dd");
+        Row(5, "exp_leads", _leads, string.Join(", ", _item.LeadDays), L.S("exp_leads_hint"));
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 52, Padding = new Padding(12, 10, 12, 10) };
         var save = new Button
@@ -924,7 +943,7 @@ public sealed class ReminderEditForm : Form
         save.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
         save.Click += (_, _) =>
         {
-            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text);
+            Reminders.Update(_item.File, _id.Text, _name.Text, _country.Text, _kind.Text, _date.Text, _leads.Text);
             DialogResult = DialogResult.OK; Close();
         };
         var cancel = new Button { Text = L.S("cancel"), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Padding = new Padding(14, 5, 14, 5), Margin = new Padding(8, 0, 0, 0) };
