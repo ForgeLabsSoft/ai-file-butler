@@ -172,7 +172,7 @@ public static class ExpiryScanner
     private static string GuessKind(string lower)
     {
         foreach (var (keys, kind) in Kinds)
-            if (keys.Any(k => lower.Contains(k))) return kind;
+            if (keys.Any(k => TextMatch.ContainsWord(lower, k))) return kind;
         return "";
     }
 

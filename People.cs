@@ -16,8 +16,7 @@ public static class People
     /// <summary>Cosine-similarity threshold to count a face as a known person.</summary>
     public static float Threshold = 0.35f;
 
-    private static readonly string Path_ =
-        System.IO.Path.Combine(AppContext.BaseDirectory, "people.json");
+    private static readonly string Path_ = Paths.File("people.json");
 
     private static List<Person>? _cache;
 

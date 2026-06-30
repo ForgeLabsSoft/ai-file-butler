@@ -36,14 +36,20 @@ public static class Memories
     /// <summary>A small library summary: photos, documents, enrolled people.</summary>
     public static (int Photos, int Docs, int People) Summary(string destRoot)
     {
-        int photos = CountFiles(Path.Combine(destRoot, "Images"));
+        int photos = CountFiles(Path.Combine(destRoot, "Images"), onlyImages: true);
         int docs = CountFiles(Path.Combine(destRoot, "Documents"))
                  + CountFiles(Path.Combine(destRoot, "Invoices"))
                  + CountFiles(Path.Combine(destRoot, "Receipts"));
         return (photos, docs, People.List().Count);
     }
 
-    private static int CountFiles(string dir) => Directory.Exists(dir) ? Safe(dir).Count() : 0;
+    private static int CountFiles(string dir, bool onlyImages = false)
+    {
+        if (!Directory.Exists(dir)) return 0;
+        var files = Safe(dir);
+        if (onlyImages) files = files.Where(f => ImgExt.Contains(Path.GetExtension(f)));
+        return files.Count();
+    }
 
     private static IEnumerable<string> Safe(string dir)
     {

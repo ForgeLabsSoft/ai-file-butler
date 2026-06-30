@@ -41,7 +41,12 @@ public static class Mrz
             }
             string number = Trim(data[..9]);
             string nationality = data.Length >= 13 ? Letters(data.Substring(10, 3)) : "";
-            string expiry = DateFrom(data.Length >= 28 ? data.Substring(21, 6) : "");
+            string expiry = "";
+            if (data.Length >= 28)
+            {
+                var fld = data.Substring(21, 6);
+                if (ExpiryChecks(fld, data[27])) expiry = DateFrom(fld);
+            }
             if (country.Length == 0) country = nationality;
             if (expiry.Length == 0) return null;
             return new Data(docType, country, name, number, nationality, expiry);
@@ -68,7 +73,12 @@ public static class Mrz
         string country = IsAlpha(l1.Substring(2, 3)) ? l1.Substring(2, 3) : "";
         string number = Trim(l1.Substring(5, 9));
         // line2: DOB(6) check(1) sex(1) expiry(6) check(1) nationality(3) …
-        string expiry = l2.Length >= 14 ? DateFrom(l2.Substring(8, 6)) : "";
+        string expiry = "";
+        if (l2.Length >= 15)
+        {
+            var fld = l2.Substring(8, 6);
+            if (ExpiryChecks(fld, l2[14])) expiry = DateFrom(fld);
+        }
         string nationality = l2.Length >= 18 ? Letters(l2.Substring(15, 3)) : "";
         if (country.Length == 0) country = nationality;
         string name = NameFromBlob(l3);
@@ -120,10 +130,34 @@ public static class Mrz
         if (s.Length != 6 || !int.TryParse(s, out _)) return "";
         if (!int.TryParse(s[..2], out var yy) || !int.TryParse(s.Substring(2, 2), out var mm) || !int.TryParse(s.Substring(4, 2), out var dd))
             return "";
-        int year = 2000 + yy; // expiry is in the future for any live document
+        // ICAO sliding-window: pick the century that keeps the year near the present,
+        // so a 2-digit year still resolves correctly after ~2050.
+        int year = 2000 + yy, now = DateTime.Today.Year;
+        while (year - now > 60) year -= 100;
+        while (now - year > 40) year += 100;
         if (mm is < 1 or > 12 || dd is < 1 or > 31) return "";
         try { return new DateTime(year, mm, dd).ToString("yyyy-MM-dd"); } catch { return ""; }
     }
+
+    // ICAO 9303 check digit: weighted 7-3-1 over A=10..Z=35, digits as-is, '<'=0, mod 10.
+    private static char CheckDigit(string field)
+    {
+        int[] w = { 7, 3, 1 };
+        int sum = 0;
+        for (int i = 0; i < field.Length; i++)
+        {
+            char c = field[i];
+            int v = c is >= '0' and <= '9' ? c - '0' : c is >= 'A' and <= 'Z' ? c - 'A' + 10 : 0;
+            sum += v * w[i % 3];
+        }
+        return (char)('0' + sum % 10);
+    }
+
+    /// <summary>A valid expiry must pass its check digit — this stops a single OCR
+    /// slip from silently producing a confidently-wrong passport expiry. A missing/
+    /// filler check digit is tolerated (some OCR drops it).</summary>
+    private static bool ExpiryChecks(string field, char check) =>
+        check is '<' or ' ' || CheckDigit(field) == check;
 
     private static string Trim(string s) => s.Replace("<", "").Trim();
     private static string Letters(string s) => Regex.Replace(s, "[^A-Z]", "");

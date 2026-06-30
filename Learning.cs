@@ -11,10 +11,8 @@ namespace AIFileButler;
 /// </summary>
 public sealed class Learner
 {
-    private static readonly string LearnedPath =
-        Path.Combine(AppContext.BaseDirectory, "learned_rules.json");
-    private static readonly string PlacementsPath =
-        Path.Combine(AppContext.BaseDirectory, "placements.json");
+    private static readonly string LearnedPath = Paths.File("learned_rules.json");
+    private static readonly string PlacementsPath = Paths.File("placements.json");
 
     private static readonly Dictionary<string, string> FolderToKey =
         Config.Categories.ToDictionary(c => c.Folder.ToLowerInvariant(), c => c.Key);

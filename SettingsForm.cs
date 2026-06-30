@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace AIFileButler;
@@ -56,7 +56,7 @@ public sealed class SettingsForm : Form
         _embedded = embedded;
         L.Lang = string.IsNullOrEmpty(cfg.Language) ? "en" : cfg.Language;
 
-        Text = "AI File Butler â€” Settings";
+        Text = "AI File Butler — Settings";
         Icon = AppArt.Load();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(560, 600);
@@ -101,8 +101,8 @@ public sealed class SettingsForm : Form
         // --- bottom action bar (always visible) ---
         var bar = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(16, 10, 16, 10) };
         var actions = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
-        // Embedded in the main window: a single "Apply" button (no Close/Cancel â€”
-        // the user navigates away via the sidebar). Stand-alone: Save Â· Cancel Â· Help.
+        // Embedded in the main window: a single "Apply" button (no Close/Cancel —
+        // the user navigates away via the sidebar). Stand-alone: Save · Cancel · Help.
         actions.Controls.Add(Reg(MakeButton("", (_, _) => SaveAndClose(), true), _embedded ? "apply" : "save"));
         if (!_embedded)
             actions.Controls.Add(Reg(MakeButton("", (_, _) => Close(), false), "cancel"));
@@ -117,7 +117,7 @@ public sealed class SettingsForm : Form
 
         // Cap the content at a comfortable width on wide windows: docked sections
         // honour the right padding, so extra space becomes a margin instead of
-        // stretching fields and pushing trailing buttons (Browseâ€¦) off the edge.
+        // stretching fields and pushing trailing buttons (Browse…) off the edge.
         const int MaxContentWidth = 880;
         scroll.Resize += (_, _) =>
         {
@@ -173,7 +173,7 @@ public sealed class SettingsForm : Form
         gFolders.Height = 180;
         sections.Add(gFolders);
 
-        // destination â€” same proven pattern as Watched folders (path fills, button
+        // destination — same proven pattern as Watched folders (path fills, button
         // in a FlowLayoutPanel in the auto-size column) so Browse is never clipped
         var gDest = Group("dest");
         var dLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
@@ -219,7 +219,7 @@ public sealed class SettingsForm : Form
         rev.Controls.Add(Reg(new Label { AutoSize = true, Margin = new Padding(0, 6, 6, 0) }, "review_below"), 0, 0);
         rev.Controls.Add(_review, 1, 0);
 
-        // reminder lead times (days before an expiry) â€” the global default.
+        // reminder lead times (days before an expiry) — the global default.
         // Label on its own line, the three boxes on the next, so nothing is clipped.
         foreach (var n in new[] { _r1, _r2, _r3 }) { n.Minimum = 0; n.Maximum = 3650; n.Width = 64; n.Margin = new Padding(0, 0, 8, 0); }
         var remBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
@@ -444,7 +444,7 @@ public sealed class SettingsForm : Form
 
 public enum WelcomeChoice { KeepManual, OpenSettings, EnableAuto }
 
-/// <summary>First-run welcome â€” explains the app and keeps it safe (manual) until
+/// <summary>First-run welcome — explains the app and keeps it safe (manual) until
 /// the user opts in. Returns the user's choice via <see cref="Choice"/>.</summary>
 public sealed class WelcomeForm : Form
 {
@@ -579,7 +579,7 @@ public sealed class PeopleForm : Form
         dlBanner.Controls.Add(dlLbl);
         dlBtn.Click += (_, _) =>
         {
-            dlBtn.Enabled = false; dlBtn.Text = "â€¦";
+            dlBtn.Enabled = false; dlBtn.Text = "…";
             Task.Run(FaceRecognizer.DownloadModel).ContinueWith(t =>
             {
                 if (IsDisposed) return;
@@ -615,7 +615,7 @@ public sealed class PeopleForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         var path = dlg.FileName;
-        _add.Enabled = false; _add.Text = "â€¦";
+        _add.Enabled = false; _add.Text = "…";
         Task.Run(() => FaceRecognizer.EmbedDominantFace(path)).ContinueWith(t =>
         {
             if (IsDisposed) return;
@@ -693,7 +693,7 @@ public sealed class HistoryForm : Form
         Refresh2();
     }
 
-    private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "â€¦" + p[^30..];
+    private static string TrimMid(string p) => p.Length <= 60 ? p : p[..28] + "…" + p[^30..];
 }
 
 /// <summary>Echo-inspired: "on this day" photos from past years + a library summary.</summary>
@@ -752,7 +752,7 @@ public sealed class MemoriesForm : Form
 }
 
 /// <summary>Reminders in three buckets: identity documents, renewals (insurance,
-/// tax, subscriptionsâ€¦) and personal tasks. Documents/renewals are scanned;
+/// tax, subscriptions…) and personal tasks. Documents/renewals are scanned;
 /// tasks are added by hand and can repeat.</summary>
 public sealed class ExpiryForm : Form
 {
@@ -833,7 +833,7 @@ public sealed class ExpiryForm : Form
     }
 
     // Column layouts per category. Documents/renewals keep the classic document
-    // fields (Start date Â· ID Â· Name Â· Country Â· Type Â· Expires Â· Days); tasks get
+    // fields (Start date · ID · Name · Country · Type · Expires · Days); tasks get
     // a task-focused set; "All" stays a compact unified view.
     private int _dateCol = 2, _daysCol = 3;
     private int[] _minCols = { 175, 120, 90, 60, 80, 90, 105 };
@@ -884,7 +884,7 @@ public sealed class ExpiryForm : Form
         i.Category.Length > 0 ? i.Category : Reminders.Categorize(i.Kind);
 
     // Manually scan a document the user picks (e.g. a passport already filed) and
-    // record its expiry â€” the same backend-independent scan the watcher uses.
+    // record its expiry — the same backend-independent scan the watcher uses.
     private void AddDocument(Button btn)
     {
         using var dlg = new OpenFileDialog
@@ -892,7 +892,7 @@ public sealed class ExpiryForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         var path = dlg.FileName;
-        btn.Enabled = false; btn.Text = "â€¦";
+        btn.Enabled = false; btn.Text = "…";
         Task.Run(() =>
         {
             var text = Extractor.Snippet(path, 4000);
@@ -921,7 +921,7 @@ public sealed class ExpiryForm : Form
         foreach (var i in shown)
         {
             int d = Reminders.DaysLeft(i);
-            var item = new ListViewItem(RowFor(i, d < 0 ? "â€”" : d.ToString())) { Tag = i };
+            var item = new ListViewItem(RowFor(i, d < 0 ? "—" : d.ToString())) { Tag = i };
             if (d < 14) item.ForeColor = Color.OrangeRed;
             else if (d < 30) item.ForeColor = Color.DarkOrange;
             _list.Items.Add(item);
@@ -991,7 +991,7 @@ public sealed class ExpiryForm : Form
         }
 
         private static int DayValue(string s) =>
-            s == "â€”" ? int.MinValue : (int.TryParse(s, out var n) ? n : int.MaxValue);
+            s == "—" ? int.MinValue : (int.TryParse(s, out var n) ? n : int.MaxValue);
     }
 }
 
@@ -1041,7 +1041,7 @@ internal static class DialogUi
     }
 
     /// <summary>A date field with a calendar drop-down. When optional it keeps a
-    /// tick-box (ticked by default, so the calendar is usable straight away —
+    /// tick-box (ticked by default, so the calendar is usable straight away �
     /// untick to mean "no date").</summary>
     public static DateTimePicker DatePicker(string iso, bool optional)
     {
@@ -1115,7 +1115,7 @@ public sealed class ReminderEditForm : Form
         rows.Add(isTask ? ("exp_task", _title, L.S("task_hint")) : ("exp_name", _name, null));
         if (isDoc)
         {
-            rows.Add(("exp_start", _start, null));   // Start date — documents only
+            rows.Add(("exp_start", _start, null));   // Start date � documents only
             rows.Add(("exp_id", _id, L.S("exp_id_hint")));
             rows.Add(("exp_country", _country, null));
         }
@@ -1182,7 +1182,7 @@ public sealed class TaskAddForm : Form
 }
 
 /// <summary>Dialog to add a document by hand: ID type, number, holder, start date
-/// and expiry — no file/scan needed (e.g. tracking a person's ID and start date).</summary>
+/// and expiry � no file/scan needed (e.g. tracking a person's ID and start date).</summary>
 public sealed class DocAddForm : Form
 {
     private readonly ComboBox _kind;

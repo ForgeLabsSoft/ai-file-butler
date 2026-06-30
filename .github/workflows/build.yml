@@ -23,16 +23,25 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Compute version from tag
+        id: ver
+        run: |
+          $ref = "${{ github.ref_name }}"
+          $v = if ($ref -match '^v(\d+\.\d+\.\d+)') { $Matches[1] } else { "0.0.1" }
+          "version=$v" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version $v"
+
       - name: Publish single-file, self-contained exe
         run: >
           dotnet publish AIFileButler.csproj -c Release -r win-x64
           -p:PublishSingleFile=true --self-contained true
+          -p:Version=${{ steps.ver.outputs.version }}
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
       - name: Build the installer
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\AIFileButler.iss'
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.version }} installer\AIFileButler.iss'
 
       - name: Compute SHA-256 checksums
         run: |

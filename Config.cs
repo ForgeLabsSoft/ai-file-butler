@@ -77,8 +77,7 @@ public sealed class Config
 
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    private static string ConfigPath =>
-        Path.Combine(AppContext.BaseDirectory, "butler_config.json");
+    private static string ConfigPath => Paths.File("butler_config.json");
 
     public static Config Load()
     {
@@ -118,7 +117,7 @@ public sealed class Config
         var hay = nameAndContent.ToLowerInvariant();
         foreach (var r in Rules)
             if (!string.IsNullOrWhiteSpace(r.Match) && !string.IsNullOrWhiteSpace(r.Folder)
-                && hay.Contains(r.Match.ToLowerInvariant()))
+                && TextMatch.ContainsWord(hay, r.Match.ToLowerInvariant()))
                 return r;
         return null;
     }

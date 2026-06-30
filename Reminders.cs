@@ -136,19 +136,42 @@ public static class Reminders
         .Select(s => int.TryParse(s.Trim(), out var n) ? n : 0)
         .Where(n => n > 0).Distinct().OrderByDescending(n => n).ToList();
 
-    private static readonly string Path_ =
-        System.IO.Path.Combine(AppContext.BaseDirectory, "reminders.json");
+    private static readonly string Path_ = Paths.File("reminders.json");
+    private static readonly object _gate = new();
     private static List<Item>? _cache;
 
     private static List<Item> Load()
     {
-        if (_cache is not null) return _cache;
-        try { _cache = File.Exists(Path_) ? JsonSerializer.Deserialize<List<Item>>(File.ReadAllText(Path_)) ?? new() : new(); }
-        catch { _cache = new(); }
-        return _cache;
+        lock (_gate)
+        {
+            // Fall back to the .bak if the main file is missing/corrupt, so a crash
+            // mid-write can never silently wipe every reminder the user had.
+            return _cache ??= ReadFile(Path_) ?? ReadFile(Path_ + ".bak") ?? new();
+        }
     }
 
-    private static void Save() => File.WriteAllText(Path_, JsonSerializer.Serialize(_cache));
+    private static List<Item>? ReadFile(string p)
+    {
+        try { return File.Exists(p) ? JsonSerializer.Deserialize<List<Item>>(File.ReadAllText(p)) : null; }
+        catch { return null; }
+    }
+
+    // Atomic: write a temp file then swap it in, keeping the previous good copy as .bak.
+    private static void Save()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_cache);
+                var tmp = Path_ + ".tmp";
+                File.WriteAllText(tmp, json);
+                if (File.Exists(Path_)) File.Replace(tmp, Path_, Path_ + ".bak");
+                else File.Move(tmp, Path_);
+            }
+            catch { /* best effort; the in-memory cache is still intact */ }
+        }
+    }
 
     public static bool TryDate(string s, out DateTime d) =>
         DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d)

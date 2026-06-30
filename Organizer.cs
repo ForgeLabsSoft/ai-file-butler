@@ -11,8 +11,7 @@ public sealed record Plan(string Src, string Dst, string Category, double Confid
 /// <summary>Safe file moves with a reversible undo log (one JSON line per move).</summary>
 public static class Organizer
 {
-    private static readonly string UndoLog =
-        Path.Combine(AppContext.BaseDirectory, "undo_log.jsonl");
+    private static readonly string UndoLog = Paths.File("undo_log.jsonl");
 
     public static Plan BuildPlan(FileInfo src, Suggestion s, Config cfg)
     {

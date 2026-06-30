@@ -3,7 +3,10 @@
 ; Produces: Output\AIFileButler-Setup.exe (a single distributable installer)
 
 #define AppName "AI File Butler"
-#define AppVersion "1.0.0"
+; AppVersion can be overridden from the command line: ISCC /DAppVersion=1.2.3
+#ifndef AppVersion
+  #define AppVersion "0.0.1"
+#endif
 #define AppPublisher "AI File Butler"
 #define ExeName "AIFileButler.exe"
 

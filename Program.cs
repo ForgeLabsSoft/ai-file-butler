@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace AIFileButler;
@@ -202,7 +202,7 @@ internal sealed class ButlerContext : ApplicationContext
                 RefreshMenu();
                 _tray.ShowBalloonTip(3000, "AI File Butler", L.S("n_startup_on"), ToolTipIcon.Info);
                 break;
-            // KeepManual: leave Auto off â€” nothing moves until the user enables it.
+            // KeepManual: leave Auto off — nothing moves until the user enables it.
         }
     }
 
@@ -210,20 +210,20 @@ internal sealed class ButlerContext : ApplicationContext
     {
         var mode = _watcher.Backend == "ollama" ? "AI (Ollama)" : "rules-only";
         var state = _watcher.Paused ? "paused" : (_watcher.Auto ? "auto" : "manual");
-        _statusItem.Text = $"â— {mode} Â· {state} Â· {_watcher.SessionCount}";
+        _statusItem.Text = $"● {mode} · {state} · {_watcher.SessionCount}";
 
         var first = _cfg.WatchDirs.Count > 0 ? Path.GetFileName(_cfg.WatchDirs[0].TrimEnd('\\')) : "?";
         var more = _cfg.WatchDirs.Count > 1 ? $" +{_cfg.WatchDirs.Count - 1}" : "";
         _watchItem.Text = $"{first}{more}";
 
         // labels follow the language chosen in Settings; an emoji prefix makes
-        // each row scannable at a glance (â° Reminders stands out, etc.)
-        _openMainItem.Text = "ðŸªŸ  " + L.S("m_open_window");
-        _organizeItem.Text = "âœ¨  " + L.S("m_organize");
-        _autoItem.Text = "ðŸ”„  " + L.S("m_auto");
-        _pauseItem.Text = "â¸  " + L.S("m_pause");
-        _startupItem.Text = "ðŸš€  " + L.S("startup");
-        _quitItem.Text = "âœ–  " + L.S("m_quit");
+        // each row scannable at a glance (⏰ Reminders stands out, etc.)
+        _openMainItem.Text = "🪟  " + L.S("m_open_window");
+        _organizeItem.Text = "✨  " + L.S("m_organize");
+        _autoItem.Text = "🔄  " + L.S("m_auto");
+        _pauseItem.Text = "⏸  " + L.S("m_pause");
+        _startupItem.Text = "🚀  " + L.S("startup");
+        _quitItem.Text = "✖  " + L.S("m_quit");
 
         _autoItem.Checked = _watcher.Auto;
         _pauseItem.Checked = _watcher.Paused;
@@ -280,7 +280,7 @@ internal sealed class ButlerContext : ApplicationContext
 
     private void OnWatcherEvent(EventKind kind, string message)
     {
-        // Marshal to the UI thread â€” the watcher fires from a background task.
+        // Marshal to the UI thread — the watcher fires from a background task.
         _ui.Post(_ =>
         {
             var (title, icon) = kind switch
