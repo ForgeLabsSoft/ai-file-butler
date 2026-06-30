@@ -40,10 +40,16 @@ public sealed class SettingsForm : Form
 
     private static readonly Color Accent = Color.FromArgb(43, 139, 234);
 
-    public SettingsForm(Config cfg, Watcher watcher)
+    private readonly bool _embedded;
+    /// <summary>Raised after a successful save when hosted inside the main window
+    /// (so the host can re-theme / refresh). Not used in stand-alone dialog mode.</summary>
+    public event Action? Applied;
+
+    public SettingsForm(Config cfg, Watcher watcher, bool embedded = false)
     {
         _cfg = cfg;
         _watcher = watcher;
+        _embedded = embedded;
         L.Lang = string.IsNullOrEmpty(cfg.Language) ? "en" : cfg.Language;
 
         Text = "AI File Butler — Settings";
@@ -91,8 +97,11 @@ public sealed class SettingsForm : Form
         // --- bottom action bar (always visible) ---
         var bar = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(16, 10, 16, 10) };
         var actions = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
-        actions.Controls.Add(Reg(MakeButton("", (_, _) => SaveAndClose(), true), "save"));
-        actions.Controls.Add(Reg(MakeButton("", (_, _) => Close(), false), "cancel"));
+        // Embedded in the main window: a single "Apply" button (no Close/Cancel —
+        // the user navigates away via the sidebar). Stand-alone: Save · Cancel · Help.
+        actions.Controls.Add(Reg(MakeButton("", (_, _) => SaveAndClose(), true), _embedded ? "apply" : "save"));
+        if (!_embedded)
+            actions.Controls.Add(Reg(MakeButton("", (_, _) => Close(), false), "cancel"));
         actions.Controls.Add(Reg(MakeButton("", (_, _) => new HelpForm().ShowDialog(this), false), "help"));
         bar.Controls.Add(actions);
         Controls.Add(bar);
@@ -380,7 +389,9 @@ public sealed class SettingsForm : Form
 
         _watcher.Auto = _auto.Checked;
         try { Startup.Set(_startup.Checked); } catch { }
-        Close();
+
+        if (_embedded) { Localize(); Theme.Apply(this); Applied?.Invoke(); }
+        else Close();
     }
 }
 

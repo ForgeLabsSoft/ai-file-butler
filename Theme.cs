@@ -28,6 +28,13 @@ internal static class Theme
         foreach (Control c in f.Controls) Style(c);
     }
 
+    /// <summary>Toggle the native dark title bar for an already-created handle.</summary>
+    public static void DarkTitleBar(IntPtr handle, bool dark)
+    {
+        int v = dark ? 1 : 0;
+        try { DwmSetWindowAttribute(handle, 20, ref v, sizeof(int)); } catch { }
+    }
+
     private static void TitleBar(Form f)
     {
         void Set()

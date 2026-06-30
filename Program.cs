@@ -51,14 +51,18 @@ internal static class Program
                     var scfg = Config.Load();
                     var lang = args.Length > 1 ? args[1] : "en";
                     scfg.Language = lang; L.Lang = lang;
-                    Theme.IsDark = scfg.DarkMode;
+                    Theme.IsDark = scfg.DarkMode || (args.Length > 4 && args[4] == "dark");
                     Form sf = args.Length > 3 && args[3] == "welcome" ? new WelcomeForm()
                         : args.Length > 3 && args[3] == "history" ? new HistoryForm()
                         : args.Length > 3 && args[3] == "people" ? new PeopleForm()
                         : args.Length > 3 && args[3] == "memories" ? new MemoriesForm(scfg.DestRoot)
                         : args.Length > 3 && args[3] == "reminders" ? new ExpiryForm()
+                        : args.Length > 3 && args[3] == "main" ? new MainWindow(scfg, new Watcher(scfg))
                         : new SettingsForm(scfg, new Watcher(scfg));
                     sf.Show();
+                    // for the main window, optionally jump to a page: --shot ro out.png main <page>
+                    if (sf is MainWindow mw && args.Length > 4 && args[4] != "dark")
+                        mw.Open(args[4]);
                     Application.DoEvents();
                     System.Threading.Thread.Sleep(300);
                     Application.DoEvents();
@@ -89,17 +93,10 @@ internal sealed class ButlerContext : ApplicationContext
     private readonly ToolStripMenuItem _autoItem;
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _startupItem;
-    private readonly ToolStripMenuItem _settingsItem;
+    private readonly ToolStripMenuItem _openMainItem;
     private readonly ToolStripMenuItem _organizeItem;
-    private readonly ToolStripMenuItem _undoItem;
-    private readonly ToolStripMenuItem _openItem;
-    private readonly ToolStripMenuItem _historyItem;
-    private readonly ToolStripMenuItem _peopleItem;
-    private readonly ToolStripMenuItem _remindersItem;
-    private readonly ToolStripMenuItem _memoriesItem;
-    private readonly ToolStripMenuItem _helpItem;
     private readonly ToolStripMenuItem _quitItem;
-    private SettingsForm? _settings;
+    private MainWindow? _main;
 
     public ButlerContext()
     {
@@ -119,16 +116,9 @@ internal sealed class ButlerContext : ApplicationContext
         _autoItem = new ToolStripMenuItem("", null, (_, _) => ToggleAuto());
         _pauseItem = new ToolStripMenuItem("", null, (_, _) => _watcher.Paused = !_watcher.Paused);
         _startupItem = new ToolStripMenuItem("", null, (_, _) => ToggleStartup());
-        _settingsItem = new ToolStripMenuItem("", null, (_, _) => OpenSettings())
+        _openMainItem = new ToolStripMenuItem("", null, (_, _) => OpenMain())
             { Font = new Font(System.Drawing.SystemFonts.MenuFont!, System.Drawing.FontStyle.Bold) };
         _organizeItem = new ToolStripMenuItem("", null, (_, _) => OrganizeNow());
-        _undoItem = new ToolStripMenuItem("", null, (_, _) => _watcher.UndoLast());
-        _openItem = new ToolStripMenuItem("", null, (_, _) => OpenSorted());
-        _historyItem = new ToolStripMenuItem("", null, (_, _) => new HistoryForm().Show());
-        _peopleItem = new ToolStripMenuItem("", null, (_, _) => new PeopleForm().Show());
-        _remindersItem = new ToolStripMenuItem("", null, (_, _) => new ExpiryForm().Show());
-        _memoriesItem = new ToolStripMenuItem("", null, (_, _) => new MemoriesForm(_cfg.DestRoot).Show());
-        _helpItem = new ToolStripMenuItem("", null, (_, _) => new HelpForm().ShowDialog());
         _quitItem = new ToolStripMenuItem("", null, (_, _) => Quit());
 
         var menu = new ContextMenuStrip();
@@ -137,21 +127,12 @@ internal sealed class ButlerContext : ApplicationContext
             _statusItem,
             _watchItem,
             new ToolStripSeparator(),
-            _settingsItem,
+            _openMainItem,
             new ToolStripSeparator(),
+            _organizeItem,
             _autoItem,
             _pauseItem,
             new ToolStripSeparator(),
-            _organizeItem,
-            _undoItem,
-            _openItem,
-            new ToolStripSeparator(),
-            _peopleItem,
-            _remindersItem,
-            _memoriesItem,
-            _historyItem,
-            new ToolStripSeparator(),
-            _helpItem,
             _startupItem,
             _quitItem,
         });
@@ -165,7 +146,7 @@ internal sealed class ButlerContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu,
         };
-        _tray.DoubleClick += (_, _) => OpenSettings();
+        _tray.DoubleClick += (_, _) => OpenMain();
 
         _watcher.Start();
         RefreshMenu();
@@ -203,7 +184,7 @@ internal sealed class ButlerContext : ApplicationContext
         switch (w.Choice)
         {
             case WelcomeChoice.OpenSettings:
-                OpenSettings();
+                OpenMain("settings");
                 break;
             case WelcomeChoice.EnableAuto:
                 _watcher.Auto = true;
@@ -228,17 +209,10 @@ internal sealed class ButlerContext : ApplicationContext
 
         // labels follow the language chosen in Settings; an emoji prefix makes
         // each row scannable at a glance (⏰ Reminders stands out, etc.)
-        _settingsItem.Text = "⚙  " + L.S("m_settings");
+        _openMainItem.Text = "🪟  " + L.S("m_open_window");
+        _organizeItem.Text = "✨  " + L.S("m_organize");
         _autoItem.Text = "🔄  " + L.S("m_auto");
         _pauseItem.Text = "⏸  " + L.S("m_pause");
-        _organizeItem.Text = "✨  " + L.S("m_organize");
-        _undoItem.Text = "↩  " + L.S("m_undo");
-        _openItem.Text = "📂  " + L.S("m_open");
-        _historyItem.Text = "🕘  " + L.S("m_history");
-        _peopleItem.Text = "🧑  " + L.S("m_people");
-        _remindersItem.Text = "⏰  " + L.S("m_reminders");
-        _memoriesItem.Text = "📅  " + L.S("m_memories");
-        _helpItem.Text = "❔  " + L.S("m_help");
         _startupItem.Text = "🚀  " + L.S("startup");
         _quitItem.Text = "✖  " + L.S("m_quit");
 
@@ -262,20 +236,20 @@ internal sealed class ButlerContext : ApplicationContext
         }
     }
 
-    private void OpenSettings()
+    private void OpenMain(string? page = null)
     {
-        if (_settings is { IsDisposed: false })
+        if (_main is null || _main.IsDisposed)
         {
-            if (_settings.WindowState == FormWindowState.Minimized)
-                _settings.WindowState = FormWindowState.Normal;
-            _settings.Activate();
-            _settings.BringToFront();
-            return;
+            _main = new MainWindow(_cfg, _watcher);
+            // when the user saves Settings, mirror the new state into the tray/watcher
+            _main.SettingsChanged += () =>
+            {
+                _watcher.Auto = _cfg.AutoOrganize;
+                People.Threshold = (float)_cfg.FaceThreshold;
+                RefreshMenu();
+            };
         }
-        _settings = new SettingsForm(_cfg, _watcher);
-        _settings.FormClosed += (_, _) => { _settings = null; RefreshMenu(); };
-        _settings.Show();
-        _settings.Activate();
+        _main.Open(page);
     }
 
     private void OrganizeNow()
