@@ -817,10 +817,13 @@ public sealed class ExpiryForm : Form
         addTask.Click += (_, _) => { using var d = new TaskAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = "task"; ApplyScheme(); UpdateTabs(); Refresh4(); } };
         var addManual = Btn("exp_add_manual", false);
         addManual.Click += (_, _) => { using var d = new DocAddForm(); if (d.ShowDialog(this) == DialogResult.OK) { _filter = d.ResultCategory; ApplyScheme(); UpdateTabs(); Refresh4(); } };
+        var ics = Btn("exp_export", false);
+        ics.Click += (_, _) => ExportIcs();
         var add = Btn("exp_add", true);
         add.Click += (_, _) => AddDocument(add);
         bar.Controls.Add(remove);
         bar.Controls.Add(edit);
+        bar.Controls.Add(ics);
         bar.Controls.Add(addTask);
         bar.Controls.Add(addManual);
         bar.Controls.Add(add);
@@ -968,6 +971,20 @@ public sealed class ExpiryForm : Form
         if (dlg.ShowDialog(this) == DialogResult.OK) Refresh4();
     }
 
+    // Export every reminder to an .ics the user can import into Outlook/Google/Win Calendar.
+    private void ExportIcs()
+    {
+        if (Reminders.All().Count == 0) { MessageBox.Show(this, L.S("exp_empty"), Text); return; }
+        using var dlg = new SaveFileDialog { Filter = "iCalendar (*.ics)|*.ics", FileName = "AI-File-Butler-reminders.ics" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllText(dlg.FileName, Reminders.ToIcs(Config.Load().ReminderDays));
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = dlg.FileName, UseShellExecute = true });
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, Text); }
+    }
+
     /// <summary>Sorts rows by a column: Expires as a date, Days left numerically
     /// (expired first), everything else as text.</summary>
     private sealed class RowComparer : System.Collections.IComparer
@@ -1041,7 +1058,7 @@ internal static class DialogUi
     }
 
     /// <summary>A date field with a calendar drop-down. When optional it keeps a
-    /// tick-box (ticked by default, so the calendar is usable straight away —
+    /// tick-box (ticked by default, so the calendar is usable straight away ï¿½
     /// untick to mean "no date").</summary>
     public static DateTimePicker DatePicker(string iso, bool optional)
     {
@@ -1115,7 +1132,7 @@ public sealed class ReminderEditForm : Form
         rows.Add(isTask ? ("exp_task", _title, L.S("task_hint")) : ("exp_name", _name, null));
         if (isDoc)
         {
-            rows.Add(("exp_start", _start, null));   // Start date — documents only
+            rows.Add(("exp_start", _start, null));   // Start date ï¿½ documents only
             rows.Add(("exp_id", _id, L.S("exp_id_hint")));
             rows.Add(("exp_country", _country, null));
         }
@@ -1182,7 +1199,7 @@ public sealed class TaskAddForm : Form
 }
 
 /// <summary>Dialog to add a document by hand: ID type, number, holder, start date
-/// and expiry — no file/scan needed (e.g. tracking a person's ID and start date).</summary>
+/// and expiry ï¿½ no file/scan needed (e.g. tracking a person's ID and start date).</summary>
 public sealed class DocAddForm : Form
 {
     private readonly ComboBox _kind;

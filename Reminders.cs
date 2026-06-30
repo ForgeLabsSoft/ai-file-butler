@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace AIFileButler;
@@ -263,7 +264,53 @@ public static class Reminders
 
     public static void Remove(string file)
     {
-        Load().RemoveAll(x => string.Equals(x.File, file, StringComparison.OrdinalIgnoreCase));
-        Save();
+        lock (_gate)
+        {
+            Load().RemoveAll(x => string.Equals(x.File, file, StringComparison.OrdinalIgnoreCase));
+            Save();
+        }
     }
+
+    /// <summary>Export all reminders as an iCalendar (.ics) file with an alarm at each
+    /// lead time — a redundant channel into Outlook / Google / Windows Calendar.</summary>
+    public static string ToIcs(List<int> globalLeads)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("BEGIN:VCALENDAR");
+        sb.AppendLine("VERSION:2.0");
+        sb.AppendLine("PRODID:-//AI File Butler//EN");
+        sb.AppendLine("CALSCALE:GREGORIAN");
+        foreach (var i in All())
+        {
+            if (!TryDate(i.Date, out var d)) continue;
+            var summary = i.Category == "task" ? i.Label
+                        : i.Kind + " expires" + (i.Name.Length > 0 ? $" ({i.Name})" : "");
+            sb.AppendLine("BEGIN:VEVENT");
+            sb.AppendLine($"UID:{Guid.NewGuid():N}@aifilebutler");
+            sb.AppendLine($"DTSTART;VALUE=DATE:{d:yyyyMMdd}");
+            sb.AppendLine($"DTEND;VALUE=DATE:{d.AddDays(1):yyyyMMdd}");
+            if (!string.IsNullOrEmpty(i.Repeat)) sb.AppendLine($"RRULE:FREQ={Freq(i.Repeat)}");
+            sb.AppendLine($"SUMMARY:{Esc(summary)}");
+            if (i.Id.Length > 0) sb.AppendLine($"DESCRIPTION:{Esc("ID: " + i.Id)}");
+            foreach (var lead in LeadFor(i, globalLeads))
+            {
+                sb.AppendLine("BEGIN:VALARM");
+                sb.AppendLine($"TRIGGER:-P{lead}D");
+                sb.AppendLine("ACTION:DISPLAY");
+                sb.AppendLine($"DESCRIPTION:{Esc(summary)}");
+                sb.AppendLine("END:VALARM");
+            }
+            sb.AppendLine("END:VEVENT");
+        }
+        sb.AppendLine("END:VCALENDAR");
+        return sb.ToString();
+    }
+
+    private static string Freq(string repeat) => repeat switch
+    {
+        "daily" => "DAILY", "weekly" => "WEEKLY", "monthly" => "MONTHLY", _ => "YEARLY",
+    };
+
+    private static string Esc(string s) =>
+        s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\n", "\\n");
 }
