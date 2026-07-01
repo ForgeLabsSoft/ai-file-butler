@@ -297,11 +297,18 @@ public sealed class MainWindow : Form
         var folderLbl = new Label { Dock = DockStyle.Fill, Text = scanRoot, ForeColor = subFg, Padding = new Padding(0, 8, 8, 0), AutoEllipsis = true };
         var scan = new Button { Text = L.S("dup_scan"), Dock = DockStyle.Right, Width = 120, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Accent, ForeColor = Color.White, Tag = "primary" };
         scan.FlatAppearance.BorderColor = Theme.Accent;
-        var choose = new Button { Text = L.S("dup_choose"), Dock = DockStyle.Right, Width = 140, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 8, 0) };
+        var choose = new Button { Text = L.S("dup_choose"), Dock = DockStyle.Right, Width = 120, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
         choose.FlatAppearance.BorderColor = Color.LightGray;
-        var gap = new Panel { Dock = DockStyle.Right, Width = 8 };
+        var mode = new ComboBox { Dock = DockStyle.Right, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+        mode.Items.Add(L.S("dup_mode_exact")); mode.Items.Add(L.S("dup_mode_similar")); mode.SelectedIndex = 0;
         var bar = new Panel { Dock = DockStyle.Top, Height = 36 };
-        bar.Controls.Add(folderLbl); bar.Controls.Add(gap); bar.Controls.Add(choose); bar.Controls.Add(scan);
+        bar.Controls.Add(folderLbl);
+        bar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8 });
+        bar.Controls.Add(mode);
+        bar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8 });
+        bar.Controls.Add(choose);
+        bar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8 });
+        bar.Controls.Add(scan);
 
         var status = new Label { Dock = DockStyle.Top, Height = 28, ForeColor = subFg, Padding = new Padding(2, 6, 0, 0), Font = new Font("Segoe UI", 9.5f), Text = L.S("dup_hint") };
 
@@ -317,25 +324,32 @@ public sealed class MainWindow : Form
             long wasted = 0;
             foreach (var g in groups)
             {
-                var lvg = new ListViewGroup(string.Format(L.S("dup_group"), g.Paths.Count, HumanSize(g.Size)));
+                var header = g.Exact
+                    ? string.Format(L.S("dup_group"), g.Files.Count, HumanSize(g.Size))
+                    : string.Format(L.S("dup_group_sim"), g.Files.Count);
+                var lvg = new ListViewGroup(header);
                 results.Groups.Add(lvg);
-                for (int i = 0; i < g.Paths.Count; i++)
+                for (int i = 0; i < g.Files.Count; i++)
                 {
-                    var p = g.Paths[i];
-                    results.Items.Add(new ListViewItem(new[] { Path.GetFileName(p), TrimDir(Path.GetDirectoryName(p) ?? ""), HumanSize(g.Size) })
-                    { Group = lvg, Tag = p, Checked = i > 0 }); // keep the first copy, tick the rest
+                    var fr = g.Files[i];
+                    // exact: keep the first, tick the rest; similar: review-only, nothing pre-ticked
+                    results.Items.Add(new ListViewItem(new[] { Path.GetFileName(fr.Path), TrimDir(Path.GetDirectoryName(fr.Path) ?? ""), HumanSize(fr.Size) })
+                    { Group = lvg, Tag = fr.Path, Checked = g.Exact && i > 0 });
                 }
                 wasted += g.Wasted;
             }
             results.EndUpdate();
-            status.Text = groups.Count == 0 ? L.S("dup_none") : string.Format(L.S("dup_found"), groups.Count, HumanSize(wasted));
+            if (groups.Count == 0) status.Text = L.S("dup_none");
+            else status.Text = groups[0].Exact
+                ? string.Format(L.S("dup_found"), groups.Count, HumanSize(wasted))
+                : string.Format(L.S("dup_found_sim"), groups.Count);
         }
 
         void DoScan()
         {
             scan.Enabled = false; scan.Text = "…"; status.Text = L.S("dup_scanning");
-            var r = scanRoot;
-            Task.Run(() => DuplicateFinder.Find(r)).ContinueWith(t =>
+            var r = scanRoot; bool similar = mode.SelectedIndex == 1;
+            Task.Run(() => similar ? DuplicateFinder.FindSimilarImages(r, 10) : DuplicateFinder.FindExact(r)).ContinueWith(t =>
             {
                 if (IsDisposed) return;
                 BeginInvoke(() => { scan.Enabled = true; scan.Text = L.S("dup_scan"); groups = t.Result ?? new(); Populate(); });

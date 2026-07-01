@@ -17,12 +17,16 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
-                case "--duptest": // hidden QA: find duplicates under a folder
+                case "--duptest": // hidden QA: find duplicates under a folder (exact + similar)
                 {
-                    var groups = DuplicateFinder.Find(args[1]);
-                    var sb = new System.Text.StringBuilder($"groups: {groups.Count}\n");
-                    foreach (var g in groups)
-                        sb.AppendLine($"{g.Paths.Count}x {g.Size}B: " + string.Join(" | ", g.Paths.Select(System.IO.Path.GetFileName)));
+                    var exact = DuplicateFinder.FindExact(args[1]);
+                    var similar = args.Length > 2 && args[2] == "sim" ? DuplicateFinder.FindSimilarImages(args[1], 10) : new();
+                    var sb = new System.Text.StringBuilder($"exact groups: {exact.Count}\n");
+                    foreach (var g in exact)
+                        sb.AppendLine($"{g.Files.Count}x {g.Size}B: " + string.Join(" | ", g.Files.Select(f => System.IO.Path.GetFileName(f.Path))));
+                    sb.AppendLine($"similar groups: {similar.Count}");
+                    foreach (var g in similar)
+                        sb.AppendLine($"~{g.Files.Count}: " + string.Join(" | ", g.Files.Select(f => System.IO.Path.GetFileName(f.Path))));
                     System.IO.File.WriteAllText("dup-result.txt", sb.ToString());
                     return;
                 }
