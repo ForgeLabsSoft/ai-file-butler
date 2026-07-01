@@ -94,4 +94,32 @@ public static class People
             }
         return best;
     }
+
+    /// <summary>Across ALL faces in a photo, the single closest enrolled person — so a
+    /// group shot files under a known face even if the biggest face is a stranger.</summary>
+    public static string? IdentifyBest(IReadOnlyList<float[]> faces)
+    {
+        string? best = null;
+        float bestSim = Threshold;
+        foreach (var emb in faces)
+            foreach (var p in Load())
+                foreach (var e in p.Embeddings)
+                {
+                    var sim = FaceRecognizer.Cosine(emb, e);
+                    if (sim >= bestSim) { bestSim = sim; best = p.Name; }
+                }
+        return best;
+    }
+
+    /// <summary>Every enrolled person recognised in a photo (for tagging / search).</summary>
+    public static List<string> IdentifyAll(IReadOnlyList<float[]> faces)
+    {
+        var names = new List<string>();
+        foreach (var emb in faces)
+        {
+            var n = Identify(emb);
+            if (n is not null && !names.Contains(n)) names.Add(n);
+        }
+        return names;
+    }
 }

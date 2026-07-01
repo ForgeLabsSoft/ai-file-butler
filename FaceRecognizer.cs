@@ -66,17 +66,39 @@ public static class FaceRecognizer
     }
 
     /// <summary>L2-normalized embedding of the largest face, or null if no face.</summary>
+    /// <summary>Embedding of the largest face (used for enrolling a single person).</summary>
     public static float[]? EmbedDominantFace(string path)
     {
-        if (!Ensure()) return null;
+        var all = EmbedAllFaces(path);
+        return all.Count > 0 ? all[0] : null; // boxes are largest-first
+    }
+
+    /// <summary>Embeddings of EVERY detected face (largest first), so a group photo
+    /// can be matched to any enrolled person — not just whoever's face is biggest.</summary>
+    public static List<float[]> EmbedAllFaces(string path)
+    {
+        var res = new List<float[]>();
+        if (!Ensure()) return res;
         try
         {
             path = Path.GetFullPath(path); // WinRT StorageFile needs an absolute path
-            var box = DetectLargestFace(path);
-            if (box is null) return null;
+            var boxes = DetectAllFaces(path);
+            if (boxes.Count == 0) return res;
             using var bmp = new Bitmap(path);
-            var r = Expand(box.Value, bmp.Width, bmp.Height, 0.20f);
+            foreach (var box in boxes)
+            {
+                var emb = EmbedCrop(bmp, Expand(box, bmp.Width, bmp.Height, 0.20f));
+                if (emb is not null) res.Add(emb);
+            }
+        }
+        catch { }
+        return res;
+    }
 
+    private static float[]? EmbedCrop(Bitmap bmp, Rectangle r)
+    {
+        try
+        {
             using var face = new Bitmap(112, 112);
             using (var g = Graphics.FromImage(face))
             {
@@ -109,8 +131,9 @@ public static class FaceRecognizer
         return new Rectangle(x, y, Math.Max(1, rw), Math.Max(1, rh));
     }
 
-    private static Rectangle? DetectLargestFace(string path)
+    private static List<Rectangle> DetectAllFaces(string path)
     {
+        var res = new List<Rectangle>();
         try
         {
             var detector = FaceDetector.CreateAsync().GetAwaiter().GetResult();
@@ -125,11 +148,11 @@ public static class FaceRecognizer
             IList<DetectedFace> faces;
             try { faces = detector.DetectFacesAsync(conv ?? bmp).GetAwaiter().GetResult(); }
             finally { conv?.Dispose(); }
-            if (faces.Count == 0) return null;
-            var b = faces.OrderByDescending(f => (long)f.FaceBox.Width * f.FaceBox.Height).First().FaceBox;
-            return new Rectangle((int)b.X, (int)b.Y, (int)b.Width, (int)b.Height);
+            foreach (var f in faces.OrderByDescending(f => (long)f.FaceBox.Width * f.FaceBox.Height))
+                res.Add(new Rectangle((int)f.FaceBox.X, (int)f.FaceBox.Y, (int)f.FaceBox.Width, (int)f.FaceBox.Height));
         }
-        catch { return null; }
+        catch { }
+        return res;
     }
 
     public static float[] Normalize(float[] v)

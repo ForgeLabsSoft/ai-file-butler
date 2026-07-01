@@ -30,9 +30,11 @@ public static class PhotoMeta
         // Without the (optional, downloaded) model, fall back to detect-only grouping.
         if (!FaceRecognizer.ModelReady)
             return HasPeople(file) ? "People" : "No People";
-        var emb = FaceRecognizer.EmbedDominantFace(file.FullName);
-        if (emb is null) return "";
-        var name = People.Identify(emb);
+        // Consider every face in the photo and file under the closest enrolled person,
+        // not just whoever's face happens to be biggest.
+        var faces = FaceRecognizer.EmbedAllFaces(file.FullName);
+        if (faces.Count == 0) return "";
+        var name = People.IdentifyBest(faces);
         return name is null ? "People/Unknown" : "People/" + name;
     }
 
