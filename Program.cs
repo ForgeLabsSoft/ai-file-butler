@@ -17,6 +17,15 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
+                case "--duptest": // hidden QA: find duplicates under a folder
+                {
+                    var groups = DuplicateFinder.Find(args[1]);
+                    var sb = new System.Text.StringBuilder($"groups: {groups.Count}\n");
+                    foreach (var g in groups)
+                        sb.AppendLine($"{g.Paths.Count}x {g.Size}B: " + string.Join(" | ", g.Paths.Select(System.IO.Path.GetFileName)));
+                    System.IO.File.WriteAllText("dup-result.txt", sb.ToString());
+                    return;
+                }
                 case "--searchtest": // hidden QA: rebuild index from a folder + run a query
                 {
                     var c = Config.Load();

@@ -30,13 +30,14 @@ public sealed class MainWindow : Form
 
     private static readonly (string Key, string Emoji, string LabelKey)[] Pages =
     {
-        ("dashboard", "🏠", "nav_dashboard"),
-        ("search",    "🔎", "nav_search"),
-        ("settings",  "⚙",  "nav_settings"),
-        ("people",    "🧑", "nav_people"),
-        ("reminders", "⏰", "nav_reminders"),
-        ("memories",  "📅", "nav_memories"),
-        ("history",   "🕘", "nav_history"),
+        ("dashboard",  "🏠", "nav_dashboard"),
+        ("search",     "🔎", "nav_search"),
+        ("duplicates", "🧹", "nav_duplicates"),
+        ("settings",   "⚙",  "nav_settings"),
+        ("people",     "🧑", "nav_people"),
+        ("reminders",  "⏰", "nav_reminders"),
+        ("memories",   "📅", "nav_memories"),
+        ("history",    "🕘", "nav_history"),
     };
 
     /// <summary>Raised after the user saves Settings, so the tray menu / watcher
@@ -168,8 +169,9 @@ public sealed class MainWindow : Form
 
     private Control BuildPage(string key) => key switch
     {
-        "search"    => BuildSearch(),
-        "settings"  => Embed(MakeSettings()),
+        "search"     => BuildSearch(),
+        "duplicates" => BuildDuplicates(),
+        "settings"   => Embed(MakeSettings()),
         "people"    => Embed(new PeopleForm()),
         "reminders" => Embed(new ExpiryForm()),
         "memories"  => Embed(new MemoriesForm(_cfg.DestRoot)),
@@ -262,6 +264,123 @@ public sealed class MainWindow : Form
         query.Select();
         return root;
     }
+
+    // ---- duplicate finder page -------------------------------------------
+
+    private static string HumanSize(long b)
+    {
+        string[] u = { "B", "KB", "MB", "GB", "TB" };
+        double s = b; int i = 0;
+        while (s >= 1024 && i < u.Length - 1) { s /= 1024; i++; }
+        return $"{s:0.#} {u[i]}";
+    }
+
+    private Control BuildDuplicates()
+    {
+        bool dark = Theme.IsDark;
+        var subFg = dark ? Color.FromArgb(150, 153, 165) : Color.FromArgb(110, 113, 122);
+        var root = new Panel { Dock = DockStyle.Fill, Padding = new Padding(22, 16, 22, 16) };
+
+        string scanRoot = _cfg.DestRoot;
+        var groups = new List<DuplicateFinder.DupGroup>();
+
+        var results = new ListView { Dock = DockStyle.Fill, View = View.Details, CheckBoxes = true, FullRowSelect = true, ShowGroups = true, Font = new Font("Segoe UI", 9.5f) };
+        results.Columns.Add(L.S("dup_col_file"), 260);
+        results.Columns.Add(L.S("dup_col_folder"), 340);
+        results.Columns.Add(L.S("dup_col_size"), 90);
+        results.DoubleClick += (_, _) =>
+        {
+            if (results.SelectedItems.Count > 0 && results.SelectedItems[0].Tag is string p && File.Exists(p))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = p, UseShellExecute = true }); } catch { }
+        };
+
+        var folderLbl = new Label { Dock = DockStyle.Fill, Text = scanRoot, ForeColor = subFg, Padding = new Padding(0, 8, 8, 0), AutoEllipsis = true };
+        var scan = new Button { Text = L.S("dup_scan"), Dock = DockStyle.Right, Width = 120, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Accent, ForeColor = Color.White, Tag = "primary" };
+        scan.FlatAppearance.BorderColor = Theme.Accent;
+        var choose = new Button { Text = L.S("dup_choose"), Dock = DockStyle.Right, Width = 140, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 8, 0) };
+        choose.FlatAppearance.BorderColor = Color.LightGray;
+        var gap = new Panel { Dock = DockStyle.Right, Width = 8 };
+        var bar = new Panel { Dock = DockStyle.Top, Height = 36 };
+        bar.Controls.Add(folderLbl); bar.Controls.Add(gap); bar.Controls.Add(choose); bar.Controls.Add(scan);
+
+        var status = new Label { Dock = DockStyle.Top, Height = 28, ForeColor = subFg, Padding = new Padding(2, 6, 0, 0), Font = new Font("Segoe UI", 9.5f), Text = L.S("dup_hint") };
+
+        var del = new Button { Text = L.S("dup_delete"), Dock = DockStyle.Right, Width = 250, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+        del.FlatAppearance.BorderColor = Color.LightGray;
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(0, 6, 0, 0) };
+        bottom.Controls.Add(del);
+
+        void Populate()
+        {
+            results.BeginUpdate();
+            results.Items.Clear(); results.Groups.Clear();
+            long wasted = 0;
+            foreach (var g in groups)
+            {
+                var lvg = new ListViewGroup(string.Format(L.S("dup_group"), g.Paths.Count, HumanSize(g.Size)));
+                results.Groups.Add(lvg);
+                for (int i = 0; i < g.Paths.Count; i++)
+                {
+                    var p = g.Paths[i];
+                    results.Items.Add(new ListViewItem(new[] { Path.GetFileName(p), TrimDir(Path.GetDirectoryName(p) ?? ""), HumanSize(g.Size) })
+                    { Group = lvg, Tag = p, Checked = i > 0 }); // keep the first copy, tick the rest
+                }
+                wasted += g.Wasted;
+            }
+            results.EndUpdate();
+            status.Text = groups.Count == 0 ? L.S("dup_none") : string.Format(L.S("dup_found"), groups.Count, HumanSize(wasted));
+        }
+
+        void DoScan()
+        {
+            scan.Enabled = false; scan.Text = "…"; status.Text = L.S("dup_scanning");
+            var r = scanRoot;
+            Task.Run(() => DuplicateFinder.Find(r)).ContinueWith(t =>
+            {
+                if (IsDisposed) return;
+                BeginInvoke(() => { scan.Enabled = true; scan.Text = L.S("dup_scan"); groups = t.Result ?? new(); Populate(); });
+            });
+        }
+        scan.Click += (_, _) => DoScan();
+        choose.Click += (_, _) =>
+        {
+            using var fb = new FolderBrowserDialog { SelectedPath = scanRoot };
+            if (fb.ShowDialog(this) == DialogResult.OK) { scanRoot = fb.SelectedPath; folderLbl.Text = scanRoot; }
+        };
+        del.Click += (_, _) =>
+        {
+            var ticked = results.CheckedItems.Cast<ListViewItem>().ToList();
+            if (ticked.Count == 0) return;
+            int deleted = 0;
+            foreach (var grp in ticked.GroupBy(it => it.Group))
+            {
+                int totalInGroup = grp.Key!.Items.Count;
+                var toDelete = grp.ToList();
+                if (toDelete.Count >= totalInGroup) toDelete = toDelete.Skip(1).ToList(); // never delete the last copy
+                foreach (var it in toDelete)
+                {
+                    if (it.Tag is not string path) continue;
+                    try
+                    {
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
+                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                            Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                        it.Remove(); deleted++;
+                    }
+                    catch { }
+                }
+            }
+            status.Text = string.Format(L.S("dup_deleted"), deleted);
+        };
+
+        root.Controls.Add(results);
+        root.Controls.Add(bottom);
+        root.Controls.Add(status);
+        root.Controls.Add(bar);
+        return root;
+    }
+
+    private static string TrimDir(string p) => p.Length <= 52 ? p : "…" + p[^51..];
 
     private SettingsForm MakeSettings()
     {
