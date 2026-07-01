@@ -33,8 +33,11 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 | ✍️ **Smart renaming** | `scan_4471.pdf` → `Invoice_Glovo_88231.pdf` — vendor, subject, date |
 | 🎬 **Rich media sorting** | Movies by **genre/lead actor/year**, music by **artist/genre/year** (ID3 tags), invoices split into **Clients / Distributors** |
 | 📸 **Photo sorting** | Photos by **date taken**, **GPS location** (offline nearest-city), or **people** — all on-device, no cloud |
-| 🧑 **Face recognition** | Enroll people by example (tray → People) and photos sort into `People/<Name>`. Uses a small on-device model, downloaded once on demand (~13 MB) |
-| ⏰ **Expiry reminders** | Reads expiry dates from your documents (passport, visa, right-to-work, insurances, car tax…) and reminds you before they lapse |
+| 🧑 **Face recognition** | Enroll people by example (People tab) and photos sort into `People/<Name>` — matched against **every** face in the shot, not just the biggest. Small on-device model, downloaded once (~13 MB) |
+| 🔎 **Semantic search** | Find files in **plain language** — "my car insurance", "that NHS letter from spring" — with on-device embeddings (Ollama). Press **Ctrl+K**. Nothing leaves your PC |
+| 👀 **Preview & undo** | See every planned move (file → new name → folder → why) and untick anything **before** it happens; one-click undo of any batch |
+| ⚙️ **Content-aware rules** | *field × operator × action*: "content contains IBAN → Invoices", "extension is .tmp → skip". Your rules beat the AI, with a live **Test** |
+| ⏰ **Expiry reminders** | Reads expiry dates (passport/visa via ICAO MRZ, insurances, car tax…) and reminds you. Three buckets — **Documents · Renewals · Tasks** — with recurring tasks and **.ics** calendar export |
 | 📅 **Memories** | "On this day" — resurfaces photos you took on today's date in past years |
 | 🎓 **Learns from you** | Move a file once; similar files follow next time |
 | 🔒 **100% offline** | No cloud, no account, no telemetry |
@@ -55,11 +58,12 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 2. The 🤵 icon appears next to your clock. Right-click it → **Settings…**
 3. Pick the folders to watch and you're done.
 
-> **"Windows protected your PC"?** During the transition to signed builds you may
-> still see this — click **More info → Run anyway**. It's safe and 100% offline.
-> (You can verify it yourself on [VirusTotal](https://www.virustotal.com).)
-> Free code signing for this open-source project is provided by the
-> [SignPath Foundation](https://signpath.org).
+> **"Windows protected your PC"?** The direct download isn't code-signed yet, so
+> Windows may show this — click **More info → Run anyway**. It's safe and 100%
+> offline (verify it yourself on [VirusTotal](https://www.virustotal.com)). Free
+> code signing for this open-source project — via the
+> [SignPath Foundation](https://signpath.org) — is **in progress**. The Microsoft
+> Store build is signed by Microsoft and won't show this warning.
 
 > First run starts in **manual mode** — nothing moves until you choose a folder and
 > click **Organize now**, then enable Auto-organize when you're happy.
@@ -68,9 +72,12 @@ the AI runs locally, so your invoices, contracts and IDs stay yours.
 Without it the Butler still sorts by rules. For content-aware AI naming:
 ```powershell
 # install Ollama from https://ollama.com, then:
-ollama pull llama3.1:8b
+ollama pull llama3.1:8b        # content-aware naming + expiry reading
+ollama pull nomic-embed-text   # enables 🔎 semantic search (small, ~270 MB)
 ```
-Next scan, the status line shows **AI (Ollama)** and renaming gets smart.
+Next scan, the status line shows **AI (Ollama)** and renaming gets smart. For
+search, open the **Search** tab and click **Rebuild index** once. Everything runs
+locally — nothing is uploaded.
 
 ## 🧠 How it works
 
@@ -98,9 +105,11 @@ no accounts, no uploads, no telemetry. Your documents never leave your computer.
 
 ## 🔏 Code signing
 
-Free code signing for this open-source project is generously provided by the
-**[SignPath Foundation](https://signpath.org)**, with a certificate issued by
-SignPath. Builds are produced reproducibly via GitHub Actions.
+The **Microsoft Store** build is signed by Microsoft. For the direct download,
+free code signing for this open-source project via the
+**[SignPath Foundation](https://signpath.org)** is **in progress** — until it goes
+live the installer is unsigned (see the "Run anyway" note above). Builds are
+produced reproducibly via GitHub Actions.
 
 ## 📄 License & privacy
 

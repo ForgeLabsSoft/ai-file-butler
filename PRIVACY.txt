@@ -1,37 +1,51 @@
 AI File Butler — Privacy Statement
-Last updated: 2026
+Last updated: 2026-07
 
 Short version: everything happens on your computer. AI File Butler does not
 collect, send, or upload anything. There are no accounts, no servers, no
-telemetry, and no tracking.
+telemetry, and no tracking. It works fully offline.
 
 WHAT THE APP DOES WITH YOUR DATA
 - It reads the files in the folders you choose to watch, in order to sort and
-  rename them. This reading happens entirely on your device.
-- For PDFs it extracts text locally; for photos it reads EXIF data (date, GPS)
-  and can run face DETECTION locally (it does not identify who anyone is); for
-  music it reads the embedded tags.
-- When the optional AI mode is enabled, the file's name and a short text snippet
-  are sent to a local AI model running on your own machine via Ollama
-  (http://localhost). This never leaves your computer and requires no internet.
+  rename them. All reading happens on your device.
+- For PDFs and scans it extracts text locally (Windows OCR). For photos it reads
+  EXIF data (date, GPS) and, if you enable it, recognises FACES on-device.
+- For music it reads the embedded tags.
+- Optional AI naming: the file's name and a short text snippet are sent to a
+  local AI model on your own machine via Ollama (http://localhost). This never
+  leaves your computer and needs no internet.
+- Optional face recognition: if you enroll people (a name + example photos), the
+  app computes a numeric "face embedding" for each face and matches new photos to
+  the closest enrolled person, on-device. Face embeddings are biometric data —
+  they are stored only on your computer and are never uploaded.
+- Optional semantic search: to let you find files in plain language, the app
+  stores a short text snippet and a numeric embedding of each indexed document in
+  a local index. This index contains text extracted from YOUR documents, so treat
+  it as sensitive; it lives only on your device and you can delete it (see below).
 
 WHAT IS STORED ON YOUR DEVICE (and nowhere else)
-- butler_config.json   — your settings (watched folders, language, options).
-- learned_rules.json   — patterns learned from your corrections.
-- placements.json      — a record of where files were moved (to detect your
-                         corrections).
-- undo_log.jsonl       — so moves can be undone.
-These are plain files next to the app. Delete them any time to reset the app.
+Everything lives under:  %LOCALAPPDATA%\AI File Butler\
+  - butler_config.json  — your settings (watched folders, language, options).
+  - learned_rules.json  — patterns learned from your corrections.
+  - placements.json     — a record of where files were moved (to detect corrections).
+  - undo_log.jsonl      — so moves can be undone.
+  - reminders.json      — document/task expiry reminders you add or that are read.
+  - people.json         — enrolled people and their face embeddings (BIOMETRIC data).
+  - search_index.json   — text snippets + embeddings for semantic search.
+  - models\             — the optional face-recognition model, downloaded on demand.
+You can delete any of these files at any time to reset that feature, or delete the
+whole folder to wipe everything the app knows about you.
 
 WHAT IS NEVER DONE
-- No file contents, file names, or metadata are uploaded anywhere.
+- No file contents, file names, metadata, face data, or search text are uploaded
+  anywhere.
 - No analytics, crash reporting, advertising, or profiling.
 - No internet connection is required for the app to work.
 
 THIRD PARTIES
-- Ollama and the AI models run locally on your device; the app does not send your
-  data to Ollama's or anyone else's servers.
-- If YOU choose to download the app or a model, those downloads go directly to
-  the respective project's site (e.g. ollama.com) under their own terms.
+- Ollama and the AI/embedding models run locally on your device; the app does not
+  send your data to Ollama's or anyone else's servers.
+- If YOU choose to download the app or a model, those downloads go directly to the
+  respective project's site (e.g. ollama.com) under their own terms.
 
-Questions: https://github.com/ForgeLabsSoft/driveforge
+Questions / issues: https://github.com/ForgeLabsSoft/ai-file-butler
