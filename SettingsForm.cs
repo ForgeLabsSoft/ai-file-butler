@@ -663,12 +663,39 @@ public sealed class HistoryForm : Form
         };
         undo.FlatAppearance.BorderColor = Color.FromArgb(43, 139, 234);
         undo.Click += (_, _) => UndoSelected();
+        var export = new Button { Text = L.S("hist_export"), AutoSize = true, Padding = new Padding(12, 5, 12, 5), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 0, 0, 0) };
+        export.FlatAppearance.BorderColor = Color.LightGray;
+        export.Click += (_, _) => ExportCsv();
         bar.Controls.Add(undo);
+        bar.Controls.Add(export);
 
         Controls.Add(_list);
         Controls.Add(bar);
         Load += (_, _) => Refresh2();
         Theme.Apply(this);
+    }
+
+    // A durable, human-readable record of every move (from -> to -> when) the user
+    // can keep even after the undo log is trimmed — the real data-loss safety net.
+    private void ExportCsv()
+    {
+        var hist = Organizer.History();
+        if (hist.Count == 0) { MessageBox.Show(this, L.S("hist_empty"), Text); return; }
+        using var dlg = new SaveFileDialog { Filter = "CSV (*.csv)|*.csv", FileName = "AI-File-Butler-moves.csv" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var sb = new System.Text.StringBuilder("When,From,To\r\n");
+            static string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+            foreach (var h in hist)
+            {
+                var when = DateTimeOffset.TryParse(h.Ts, out var dt) ? dt.LocalDateTime.ToString("s") : h.Ts;
+                sb.Append(Q(when)).Append(',').Append(Q(h.From)).Append(',').Append(Q(h.To)).Append("\r\n");
+            }
+            File.WriteAllText(dlg.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = dlg.FileName, UseShellExecute = true });
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, Text); }
     }
 
     private void Refresh2()
