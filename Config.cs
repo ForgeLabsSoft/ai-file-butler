@@ -114,24 +114,68 @@ public sealed class Config
         File.WriteAllText(ConfigPath, json);
     }
 
-    /// <summary>First user rule whose Match is found in the text, or null.</summary>
-    public RuleEntry? MatchRule(string nameAndContent)
+    /// <summary>The first enabled rule that matches a file, or null. Rules are tried
+    /// top to bottom (first match wins). Only name/content/extension are available
+    /// here — those are known before the file is classified.</summary>
+    public RuleEntry? EvaluateRules(string name, string content, string ext)
     {
-        var hay = nameAndContent.ToLowerInvariant();
         foreach (var r in Rules)
-            if (!string.IsNullOrWhiteSpace(r.Match) && !string.IsNullOrWhiteSpace(r.Folder)
-                && TextMatch.ContainsWord(hay, r.Match.ToLowerInvariant()))
-                return r;
+        {
+            if (!r.Enabled || string.IsNullOrWhiteSpace(r.Match)) continue;
+            var hay = r.Field switch
+            {
+                "name" => name,
+                "content" => content,
+                "ext" => ext,
+                _ => name + "\n" + content,
+            };
+            if (RuleEntry.Matches(hay, r.Op, r.Match)) return r;
+        }
         return null;
     }
 }
 
 public sealed class RuleEntry
 {
-    public string Match { get; set; } = "";   // keyword in filename or content
-    public string Folder { get; set; } = "";  // destination sub-path
+    public string Match { get; set; } = "";     // the value to test (name kept for back-compat)
+    public string Folder { get; set; } = "";    // destination sub-path for the "folder" action
+    public bool Enabled { get; set; } = true;
+    public string Field { get; set; } = "any";  // any (name+content) | name | content | ext
+    public string Op { get; set; } = "contains"; // contains | equals | starts | ends | regex
+    public string Action { get; set; } = "folder"; // folder | review | skip
 
-    public override string ToString() => $"\"{Match}\"  →  {Folder}";
+    public static readonly string[] Fields = { "any", "name", "content", "ext" };
+    public static readonly string[] Ops = { "contains", "equals", "starts", "ends", "regex" };
+    public static readonly string[] Actions = { "folder", "review", "skip" };
+
+    public static bool Matches(string hay, string op, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return false;
+        var h = hay.ToLowerInvariant();
+        var v = value.ToLowerInvariant().Trim();
+        return op switch
+        {
+            "equals" => h.Trim() == v,
+            "starts" => h.TrimStart().StartsWith(v, StringComparison.Ordinal),
+            "ends" => h.TrimEnd().EndsWith(v, StringComparison.Ordinal),
+            "regex" => TryRegex(hay, value),
+            _ => TextMatch.ContainsWord(h, v),
+        };
+    }
+
+    private static bool TryRegex(string hay, string pattern)
+    {
+        try { return System.Text.RegularExpressions.Regex.IsMatch(hay, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase); }
+        catch { return false; }
+    }
+
+    public override string ToString()
+    {
+        var act = Action == "folder" ? "→ " + Folder : Action == "review" ? "→ Review" : "→ Skip";
+        var f = Field == "any" ? "name/content" : Field == "ext" ? "extension" : Field;
+        var flag = Enabled ? "" : "(off) ";
+        return $"{flag}{f} {Op} \"{Match}\"  {act}";
+    }
 }
 
 // Source-generated JSON context — needed for trimming/single-file safety.

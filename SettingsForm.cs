@@ -34,6 +34,9 @@ public sealed class SettingsForm : Form
     private readonly ListBox _rulesList = new();
     private readonly TextBox _ruleMatch = new();
     private readonly TextBox _ruleFolder = new();
+    private readonly ComboBox _ruleField = new();
+    private readonly ComboBox _ruleOp = new();
+    private readonly ComboBox _ruleAction = new();
 
     private static readonly string[] MusicOpts = { "artist", "genre", "year", "alpha", "none" };
     private static readonly string[] MovieOpts = { "genre", "actor", "year", "date", "location", "alpha", "none" };
@@ -263,27 +266,61 @@ public sealed class SettingsForm : Form
         gSort.Height = 160;
         sections.Add(gSort);
 
-        // my rules (keyword -> folder)
+        // my rules: field × operator × value → action (folder / review / skip)
         var gRules = Group("rules");
-        var rWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, AutoSize = true };
+        foreach (var (c, keys) in new[] {
+            (_ruleField, new[] { "rule_field_any", "rule_field_name", "rule_field_content", "rule_field_ext" }),
+            (_ruleOp, new[] { "rule_op_contains", "rule_op_equals", "rule_op_starts", "rule_op_ends", "rule_op_regex" }),
+            (_ruleAction, new[] { "rule_act_folder", "rule_act_review", "rule_act_skip" }) })
+        {
+            c.DropDownStyle = ComboBoxStyle.DropDownList;
+            foreach (var k in keys) c.Items.Add(L.S(k));
+            c.SelectedIndex = 0;
+        }
+        _ruleAction.SelectedIndexChanged += (_, _) => _ruleFolder.Enabled = _ruleAction.SelectedIndex == 0;
+
+        var rWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, AutoSize = true };
         rWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         rWrap.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _rulesList.Dock = DockStyle.Fill; _rulesList.IntegralHeight = false; _rulesList.Height = 90;
+        _rulesList.Dock = DockStyle.Fill; _rulesList.IntegralHeight = false; _rulesList.Height = 84;
+        _rulesList.DoubleClick += (_, _) =>
+        {
+            int i = _rulesList.SelectedIndex;
+            if (i >= 0 && _rulesList.Items[i] is RuleEntry re) { re.Enabled = !re.Enabled; _rulesList.Items[i] = re; }
+        };
         rWrap.Controls.Add(_rulesList, 0, 0);
         rWrap.Controls.Add(Reg(MakeButton("", (_, _) => { if (_rulesList.SelectedIndex >= 0) _rulesList.Items.RemoveAt(_rulesList.SelectedIndex); }, false), "remove"), 1, 0);
-        var addRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, AutoSize = true };
-        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        addRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _ruleMatch.Dock = DockStyle.Fill; _ruleFolder.Dock = DockStyle.Fill;
-        addRow.Controls.Add(_ruleMatch, 0, 0);
-        addRow.Controls.Add(_ruleFolder, 1, 0);
-        addRow.Controls.Add(Reg(MakeButton("", (_, _) => AddRule(), false), "rule_add"), 2, 0);
-        rWrap.Controls.Add(addRow, 0, 1); rWrap.SetColumnSpan(addRow, 2);
-        rWrap.Controls.Add(Reg(new Label { AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(2, 4, 0, 0) }, "rule_hint"), 0, 2);
-        rWrap.SetColumnSpan(rWrap.GetControlFromPosition(0, 2)!, 2);
+
+        // condition row: [Field] [Op] [Value…]
+        _ruleField.Width = 150; _ruleOp.Width = 130;
+        var condRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, AutoSize = true };
+        condRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        condRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        condRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _ruleMatch.Dock = DockStyle.Fill; _ruleMatch.PlaceholderText = L.S("rule_value_hint");
+        condRow.Controls.Add(_ruleField, 0, 0);
+        condRow.Controls.Add(_ruleOp, 1, 0);
+        condRow.Controls.Add(_ruleMatch, 2, 0);
+        rWrap.Controls.Add(condRow, 0, 1); rWrap.SetColumnSpan(condRow, 2);
+
+        // action row: [Action] [Folder…] [Test] [Add]
+        _ruleAction.Width = 160;
+        var actRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, AutoSize = true };
+        actRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        actRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _ruleFolder.Dock = DockStyle.Fill; _ruleFolder.PlaceholderText = L.S("rule_folder_hint");
+        actRow.Controls.Add(_ruleAction, 0, 0);
+        actRow.Controls.Add(_ruleFolder, 1, 0);
+        actRow.Controls.Add(Reg(MakeButton("", (_, _) => TestRule(), false), "rule_test"), 2, 0);
+        actRow.Controls.Add(Reg(MakeButton("", (_, _) => AddRule(), false), "rule_add"), 3, 0);
+        rWrap.Controls.Add(actRow, 0, 2); rWrap.SetColumnSpan(actRow, 2);
+
+        rWrap.Controls.Add(Reg(new Label { AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(2, 4, 0, 0) }, "rule_hint"), 0, 3);
+        rWrap.SetColumnSpan(rWrap.GetControlFromPosition(0, 3)!, 2);
         gRules.Controls.Add(rWrap);
-        gRules.Height = 200;
+        gRules.Height = 236;
         sections.Add(gRules);
 
         // dock each section to the top (added in reverse so the first stays on top);
@@ -295,13 +332,38 @@ public sealed class SettingsForm : Form
         }
     }
 
+    private RuleEntry EditorRule() => new()
+    {
+        Match = _ruleMatch.Text.Trim(),
+        Folder = _ruleFolder.Text.Trim(),
+        Enabled = true,
+        Field = RuleEntry.Fields[Math.Max(0, _ruleField.SelectedIndex)],
+        Op = RuleEntry.Ops[Math.Max(0, _ruleOp.SelectedIndex)],
+        Action = RuleEntry.Actions[Math.Max(0, _ruleAction.SelectedIndex)],
+    };
+
     private void AddRule()
     {
-        var m = _ruleMatch.Text.Trim();
-        var f = _ruleFolder.Text.Trim();
-        if (m.Length == 0 || f.Length == 0) return;
-        _rulesList.Items.Add(new RuleEntry { Match = m, Folder = f });
+        var r = EditorRule();
+        if (r.Match.Length == 0) { _ruleMatch.Focus(); return; }
+        if (r.Action == "folder" && r.Folder.Length == 0) { _ruleFolder.Focus(); return; }
+        _rulesList.Items.Add(r);
         _ruleMatch.Clear(); _ruleFolder.Clear();
+    }
+
+    // Live check: does the current editor rule match a file the user picks?
+    private void TestRule()
+    {
+        var r = EditorRule();
+        if (r.Match.Length == 0) { MessageBox.Show(this, L.S("rule_test_empty"), Text); return; }
+        using var dlg = new OpenFileDialog();
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        var name = Path.GetFileName(dlg.FileName);
+        var ext = Path.GetExtension(dlg.FileName);
+        string content = ""; try { content = Extractor.Snippet(dlg.FileName, 2000); } catch { }
+        var hay = r.Field switch { "name" => name, "content" => content, "ext" => ext, _ => name + "\n" + content };
+        bool match = RuleEntry.Matches(hay, r.Op, r.Match);
+        MessageBox.Show(this, string.Format(L.S(match ? "rule_test_yes" : "rule_test_no"), name), Text);
     }
 
     private GroupBox Group(string key)

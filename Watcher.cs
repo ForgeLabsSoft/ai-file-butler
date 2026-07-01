@@ -199,9 +199,13 @@ public sealed class Watcher
     private Suggestion? Decide(FileInfo file, string snippet, IClassifier clf)
     {
         var fname = Slug.Make(Path.GetFileNameWithoutExtension(file.Name), file.Extension);
-        var rule = _cfg.MatchRule(file.Name + "\n" + snippet);
+        var rule = _cfg.EvaluateRules(file.Name, snippet, file.Extension);
         if (rule is not null)
-            return new Suggestion("rule", fname, 0.95, $"your rule: \"{rule.Match}\"", "rule") { FolderOverride = rule.Folder };
+        {
+            if (rule.Action == "skip") return null; // leave the file where it is
+            var folder = rule.Action == "review" ? "_Review" : rule.Folder;
+            return new Suggestion("rule", fname, 0.95, $"rule: {rule.Field} {rule.Op} \"{rule.Match}\"", "rule") { FolderOverride = folder };
+        }
         var learned = _learner.Suggest(file.Name);
         if (learned is not null)
             return new Suggestion(learned, fname, 0.95, "learned from your correction", "learned");

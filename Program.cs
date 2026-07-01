@@ -35,7 +35,7 @@ internal static class Program
                     var a = Embedder.Embed("passport renewal and travel document expiry", c.OllamaUrl, c.EmbedModel);
                     var b = Embedder.Embed("how do I renew my passport before it expires", c.OllamaUrl, c.EmbedModel);
                     var d = Embedder.Embed("chocolate cake recipe with eggs and flour", c.OllamaUrl, c.EmbedModel);
-                    string r = a is null ? "embeddings unavailable"
+                    string r = a is null || b is null || d is null ? "embeddings unavailable"
                         : $"dims={a.Length}\nsim(passport, renew-passport)={Embedder.Cosine(a, b):F3}\nsim(passport, cake)={Embedder.Cosine(a, d):F3}";
                     System.IO.File.WriteAllText("emb-result.txt", r);
                     return;
@@ -373,5 +373,7 @@ internal static class AppArt
         return Icon.FromHandle(bmp.GetHicon());
     }
 }
+
+
 
 
