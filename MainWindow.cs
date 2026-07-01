@@ -285,9 +285,9 @@ public sealed class MainWindow : Form
         var groups = new List<DuplicateFinder.DupGroup>();
 
         var results = new ListView { Dock = DockStyle.Fill, View = View.Details, CheckBoxes = true, FullRowSelect = true, ShowGroups = true, Font = new Font("Segoe UI", 9.5f) };
-        results.Columns.Add(L.S("dup_col_file"), 260);
-        results.Columns.Add(L.S("dup_col_folder"), 340);
-        results.Columns.Add(L.S("dup_col_size"), 90);
+        results.Columns.Add(L.S("dup_col_file"), 210);
+        results.Columns.Add(L.S("dup_col_folder"), 240);
+        results.Columns.Add(L.S("dup_col_size"), 80);
         results.DoubleClick += (_, _) =>
         {
             if (results.SelectedItems.Count > 0 && results.SelectedItems[0].Tag is string p && File.Exists(p))
@@ -300,7 +300,8 @@ public sealed class MainWindow : Form
         var choose = new Button { Text = L.S("dup_choose"), Dock = DockStyle.Right, Width = 120, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
         choose.FlatAppearance.BorderColor = Color.LightGray;
         var mode = new ComboBox { Dock = DockStyle.Right, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
-        mode.Items.Add(L.S("dup_mode_exact")); mode.Items.Add(L.S("dup_mode_similar")); mode.SelectedIndex = 0;
+        mode.Items.Add(L.S("dup_mode_exact")); mode.Items.Add(L.S("dup_mode_similar")); mode.Items.Add(L.S("dup_mode_large"));
+        mode.SelectedIndex = 0;
         var bar = new Panel { Dock = DockStyle.Top, Height = 36 };
         bar.Controls.Add(folderLbl);
         bar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8 });
@@ -345,15 +346,38 @@ public sealed class MainWindow : Form
                 : string.Format(L.S("dup_found_sim"), groups.Count);
         }
 
+        void PopulateLargest(DiskUsage.Result du)
+        {
+            results.BeginUpdate();
+            results.Items.Clear(); results.Groups.Clear();
+            foreach (var bf in du.Largest)
+                results.Items.Add(new ListViewItem(new[] { Path.GetFileName(bf.Path), TrimDir(Path.GetDirectoryName(bf.Path) ?? ""), HumanSize(bf.Size) }) { Tag = bf.Path });
+            results.EndUpdate();
+            status.Text = du.FileCount == 0 ? L.S("dup_none")
+                : string.Format(L.S("dup_large_result"), du.FileCount, HumanSize(du.TotalBytes), Path.GetFileName(du.BiggestFolder), HumanSize(du.BiggestFolderBytes));
+        }
+
         void DoScan()
         {
+            int m = mode.SelectedIndex;
             scan.Enabled = false; scan.Text = "…"; status.Text = L.S("dup_scanning");
-            var r = scanRoot; bool similar = mode.SelectedIndex == 1;
-            Task.Run(() => similar ? DuplicateFinder.FindSimilarImages(r, 10) : DuplicateFinder.FindExact(r)).ContinueWith(t =>
+            var r = scanRoot;
+            if (m == 2)
             {
-                if (IsDisposed) return;
-                BeginInvoke(() => { scan.Enabled = true; scan.Text = L.S("dup_scan"); groups = t.Result ?? new(); Populate(); });
-            });
+                Task.Run(() => DiskUsage.Scan(r)).ContinueWith(t =>
+                {
+                    if (IsDisposed) return;
+                    BeginInvoke(() => { scan.Enabled = true; scan.Text = L.S("dup_scan"); groups = new(); PopulateLargest(t.Result); });
+                });
+            }
+            else
+            {
+                Task.Run(() => m == 1 ? DuplicateFinder.FindSimilarImages(r, 10) : DuplicateFinder.FindExact(r)).ContinueWith(t =>
+                {
+                    if (IsDisposed) return;
+                    BeginInvoke(() => { scan.Enabled = true; scan.Text = L.S("dup_scan"); groups = t.Result ?? new(); Populate(); });
+                });
+            }
         }
         scan.Click += (_, _) => DoScan();
         choose.Click += (_, _) =>
@@ -368,9 +392,11 @@ public sealed class MainWindow : Form
             int deleted = 0;
             foreach (var grp in ticked.GroupBy(it => it.Group))
             {
-                int totalInGroup = grp.Key!.Items.Count;
                 var toDelete = grp.ToList();
-                if (toDelete.Count >= totalInGroup) toDelete = toDelete.Skip(1).ToList(); // never delete the last copy
+                if (grp.Key is ListViewGroup lvg) // grouped duplicates: never delete the last copy of a set
+                {
+                    if (toDelete.Count >= lvg.Items.Count) toDelete = toDelete.Skip(1).ToList();
+                }
                 foreach (var it in toDelete)
                 {
                     if (it.Tag is not string path) continue;
@@ -387,12 +413,40 @@ public sealed class MainWindow : Form
             status.Text = string.Format(L.S("dup_deleted"), deleted);
         };
 
-        root.Controls.Add(results);
+        // preview panel — shows the selected image so you can eyeball photo matches
+        var previewBox = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = dark ? Color.FromArgb(42, 44, 54) : Color.FromArgb(245, 246, 248) };
+        var previewInfo = new Label { Dock = DockStyle.Bottom, Height = 42, ForeColor = subFg, Padding = new Padding(6, 6, 6, 0), Font = new Font("Segoe UI", 9f) };
+        var preview = new Panel { Dock = DockStyle.Right, Width = 300, Padding = new Padding(12, 0, 0, 0) };
+        preview.Controls.Add(previewBox); preview.Controls.Add(previewInfo);
+        results.SelectedIndexChanged += (_, _) =>
+        {
+            previewBox.Image?.Dispose(); previewBox.Image = null; previewInfo.Text = "";
+            if (results.SelectedItems.Count == 0 || results.SelectedItems[0].Tag is not string p) return;
+            previewInfo.Text = Path.GetFileName(p);
+            if (!IsImageFile(p) || !File.Exists(p)) return;
+            try
+            {
+                using var tmp = Image.FromStream(new MemoryStream(File.ReadAllBytes(p))); // copy so the file isn't locked
+                previewBox.Image = new Bitmap(tmp);
+                previewInfo.Text = $"{Path.GetFileName(p)}  ·  {tmp.Width}×{tmp.Height}";
+            }
+            catch { }
+        };
+
+        var center = new Panel { Dock = DockStyle.Fill };
+        center.Controls.Add(results); // Fill (added first so it yields to the docked preview)
+        center.Controls.Add(preview);
+
+        root.Controls.Add(center);
         root.Controls.Add(bottom);
         root.Controls.Add(status);
         root.Controls.Add(bar);
         return root;
     }
+
+    private static readonly HashSet<string> ImgExts = new(StringComparer.OrdinalIgnoreCase)
+    { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp" };
+    private static bool IsImageFile(string p) => ImgExts.Contains(Path.GetExtension(p));
 
     private static string TrimDir(string p) => p.Length <= 52 ? p : "…" + p[^51..];
 
