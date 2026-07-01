@@ -31,6 +31,7 @@ public sealed class MainWindow : Form
     private static readonly (string Key, string Emoji, string LabelKey)[] Pages =
     {
         ("dashboard", "🏠", "nav_dashboard"),
+        ("search",    "🔎", "nav_search"),
         ("settings",  "⚙",  "nav_settings"),
         ("people",    "🧑", "nav_people"),
         ("reminders", "⏰", "nav_reminders"),
@@ -68,6 +69,10 @@ public sealed class MainWindow : Form
         {
             if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
         };
+
+        // Ctrl+K jumps straight to search (the palette gesture Windows users expect).
+        KeyPreview = true;
+        KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.K) { e.Handled = true; Navigate("search"); } };
     }
 
     /// <summary>Show (and focus) the window, optionally jumping to a page.</summary>
@@ -163,6 +168,7 @@ public sealed class MainWindow : Form
 
     private Control BuildPage(string key) => key switch
     {
+        "search"    => BuildSearch(),
         "settings"  => Embed(MakeSettings()),
         "people"    => Embed(new PeopleForm()),
         "reminders" => Embed(new ExpiryForm()),
@@ -170,6 +176,92 @@ public sealed class MainWindow : Form
         "history"   => Embed(new HistoryForm()),
         _           => BuildDashboard(),
     };
+
+    // ---- semantic search page --------------------------------------------
+
+    private Control BuildSearch()
+    {
+        bool dark = Theme.IsDark;
+        var subFg = dark ? Color.FromArgb(150, 153, 165) : Color.FromArgb(110, 113, 122);
+
+        var root = new Panel { Dock = DockStyle.Fill, Padding = new Padding(22, 16, 22, 16) };
+
+        var query = new TextBox { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 11f), PlaceholderText = L.S("search_placeholder") };
+        var go = new Button
+        {
+            Text = L.S("search_btn"), Dock = DockStyle.Right, Width = 110, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Accent, ForeColor = Color.White, Tag = "primary",
+        };
+        go.FlatAppearance.BorderColor = Theme.Accent;
+        var gap = new Panel { Dock = DockStyle.Right, Width = 8 };
+        var bar = new Panel { Dock = DockStyle.Top, Height = 40 };
+        bar.Controls.Add(query); bar.Controls.Add(gap); bar.Controls.Add(go);
+
+        var status = new Label { Dock = DockStyle.Top, Height = 30, ForeColor = subFg, Padding = new Padding(2, 8, 0, 0), Font = new Font("Segoe UI", 9.5f) };
+
+        var results = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, Font = new Font("Segoe UI", 9.5f) };
+        results.Columns.Add(L.S("search_col_file"), 230);
+        results.Columns.Add(L.S("search_col_folder"), 130);
+        results.Columns.Add(L.S("search_col_match"), 420);
+        results.Columns.Add(L.S("search_col_score"), 70);
+        results.DoubleClick += (_, _) =>
+        {
+            if (results.SelectedItems.Count > 0 && results.SelectedItems[0].Tag is string p && File.Exists(p))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = p, UseShellExecute = true }); } catch { }
+        };
+
+        var rebuild = new Button
+        {
+            Text = L.S("search_rebuild"), Dock = DockStyle.Right, Width = 150, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        rebuild.FlatAppearance.BorderColor = Color.LightGray;
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(0, 6, 0, 0) };
+        bottom.Controls.Add(rebuild);
+
+        void Search()
+        {
+            var q = query.Text.Trim();
+            if (q.Length == 0) return;
+            status.Text = L.S("search_searching");
+            Task.Run(() => Embedder.Embed(q, _cfg.OllamaUrl, _cfg.EmbedModel)).ContinueWith(t =>
+            {
+                if (IsDisposed) return;
+                BeginInvoke(() =>
+                {
+                    results.Items.Clear();
+                    if (t.Result is not float[] qv) { status.Text = L.S("search_no_model"); return; }
+                    var hits = SearchIndex.Query(qv, 30);
+                    foreach (var (e, score) in hits)
+                        results.Items.Add(new ListViewItem(new[] { Path.GetFileName(e.Path), e.Folder, e.Snippet.Replace('\n', ' ').Replace('\r', ' '), score.ToString("F2") }) { Tag = e.Path });
+                    status.Text = hits.Count == 0 ? L.S("search_none") : string.Format(L.S("search_results"), hits.Count);
+                });
+            });
+        }
+        go.Click += (_, _) => Search();
+        query.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Search(); } };
+        rebuild.Click += (_, _) =>
+        {
+            rebuild.Enabled = false; rebuild.Text = "…"; status.Text = L.S("search_indexing");
+            Task.Run(() => SearchIndex.Rebuild(_cfg.DestRoot, _cfg.OllamaUrl, _cfg.EmbedModel)).ContinueWith(t =>
+            {
+                if (IsDisposed) return;
+                BeginInvoke(() =>
+                {
+                    rebuild.Enabled = true; rebuild.Text = L.S("search_rebuild");
+                    status.Text = string.Format(L.S("search_indexed"), t.Result);
+                });
+            });
+        };
+
+        status.Text = SearchIndex.Count == 0 ? L.S("search_empty") : string.Format(L.S("search_ready"), SearchIndex.Count);
+
+        root.Controls.Add(results);
+        root.Controls.Add(bottom);
+        root.Controls.Add(status);
+        root.Controls.Add(bar);
+        query.Select();
+        return root;
+    }
 
     private SettingsForm MakeSettings()
     {

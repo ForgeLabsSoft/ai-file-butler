@@ -43,6 +43,9 @@ public sealed class Config
     public string DestRoot { get; set; } = Path.Combine(Home, "Downloads", "_Sorted");
     public string OllamaUrl { get; set; } = "http://localhost:11434";
     public string OllamaModel { get; set; } = "llama3.1:8b";
+    // Dedicated embedding model for semantic search (small; pull once with
+    // `ollama pull nomic-embed-text`). Separate from the chat model above.
+    public string EmbedModel { get; set; } = "nomic-embed-text";
     public string Language { get; set; } = "en";
     public int MaxContentChars { get; set; } = 1500;
     public int MinAgeSeconds { get; set; } = 10;

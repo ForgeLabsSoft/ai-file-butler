@@ -75,6 +75,20 @@ public sealed class Watcher
         lock (_lock) return BuildMoves();
     }
 
+    // Add a filed document to the semantic search index in the background (best effort;
+    // no-op if the embedding model isn't available).
+    private void IndexDoc(string path, string folder, string snippet)
+    {
+        if (string.IsNullOrWhiteSpace(snippet)) return;
+        var url = _cfg.OllamaUrl;
+        var model = _cfg.EmbedModel;
+        Task.Run(() =>
+        {
+            try { var v = Embedder.Embed(snippet, url, model); if (v is not null) SearchIndex.Add(path, folder, snippet, v, model); }
+            catch { }
+        });
+    }
+
     private List<Pending> BuildMoves()
     {
         var clf = ClassifierFactory.Get(_cfg);
@@ -118,6 +132,7 @@ public sealed class Watcher
                     Organizer.Apply(m.Plan);
                     _learner.RecordPlacement(m.Plan.Dst, m.File.Name, m.Plan.Category);
                     RecordExpiry(m.Plan.Dst, m.File, m.Snippet, m.Sug);
+                    IndexDoc(m.Plan.Dst, Config.FolderFor(m.Plan.Category), m.Snippet);
                     _seenSizes.Remove(m.File.FullName);
                     SessionCount++;
                     applied.Add(m.Plan);

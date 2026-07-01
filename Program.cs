@@ -17,6 +17,29 @@ internal static class Program
             {
                 case "--register": Startup.Set(true); return;
                 case "--unregister": Startup.Set(false); return;
+                case "--searchtest": // hidden QA: rebuild index from a folder + run a query
+                {
+                    var c = Config.Load();
+                    int n = SearchIndex.Rebuild(args[1], c.OllamaUrl, c.EmbedModel);
+                    var sb = new System.Text.StringBuilder($"indexed {n}\nquery: {args[2]}\n");
+                    var qv = Embedder.Embed(args[2], c.OllamaUrl, c.EmbedModel);
+                    if (qv is not null)
+                        foreach (var (e, s) in SearchIndex.Query(qv, 5))
+                            sb.AppendLine($"{s:F3}  {System.IO.Path.GetFileName(e.Path)}");
+                    System.IO.File.WriteAllText("search-result.txt", sb.ToString());
+                    return;
+                }
+                case "--embtest": // hidden QA: verify embeddings + semantic similarity
+                {
+                    var c = Config.Load();
+                    var a = Embedder.Embed("passport renewal and travel document expiry", c.OllamaUrl, c.EmbedModel);
+                    var b = Embedder.Embed("how do I renew my passport before it expires", c.OllamaUrl, c.EmbedModel);
+                    var d = Embedder.Embed("chocolate cake recipe with eggs and flour", c.OllamaUrl, c.EmbedModel);
+                    string r = a is null ? "embeddings unavailable"
+                        : $"dims={a.Length}\nsim(passport, renew-passport)={Embedder.Cosine(a, b):F3}\nsim(passport, cake)={Embedder.Cosine(a, d):F3}";
+                    System.IO.File.WriteAllText("emb-result.txt", r);
+                    return;
+                }
                 case "--expiry": // hidden QA: test the expiry scanner on a text/file
                 {
                     var input = args.Length >= 2 ? string.Join(" ", args.Skip(1)) : "";

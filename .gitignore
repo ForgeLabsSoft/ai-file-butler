@@ -22,3 +22,6 @@ models/
 expiry-result.txt
 faces-result.txt
 model-dl.txt
+search-result.txt
+emb-result.txt
+search_index.json
